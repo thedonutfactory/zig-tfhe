@@ -246,7 +246,7 @@ pub fn externalProductWithFft(
     }
 
     for (0..L * 2) |i| {
-        dec_ffts[i] = try plan.batchIfft(dec[i], allocator);
+        dec_ffts[i] = try plan.processor.ifft(dec[i]);
     }
 
     // Accumulate in frequency domain
@@ -256,15 +256,15 @@ pub fn externalProductWithFft(
     }
 
     // Single IFFT per output polynomial
-    const result_a = try plan.fft(out_a_fft, allocator);
+    const result_a = try plan.processor.fft(out_a_fft);
     defer allocator.free(result_a);
-    const result_b = try plan.fft(out_b_fft, allocator);
+    const result_b = try plan.processor.fft(out_b_fft);
     defer allocator.free(result_b);
 
     var result = trlwe.TRLWELv1.init();
     for (0..N) |i| {
-        result.a[i] = @as(params.Torus, @intFromFloat(result_a[i]));
-        result.b[i] = @as(params.Torus, @intFromFloat(result_b[i]));
+        result.a[i] = result_a[i];
+        result.b[i] = result_b[i];
     }
 
     return result;
@@ -282,7 +282,7 @@ pub const TRGSWLv1FFT = struct {
         };
 
         for (0..params.implementation.trgsw_lv1.L * 2) |i| {
-            result.trlwe_fft_array[i] = try trlwe.TRLWELv1FFT.init(&trgsw.trlwe_array[i], plan, allocator);
+            result.trlwe_fft_array[i] = try trlwe.TRLWELv1FFT.initFromTrlwe(&trgsw.trlwe_array[i], plan, allocator);
         }
 
         return result;

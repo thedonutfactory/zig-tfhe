@@ -126,6 +126,41 @@ pub const TRLWELv1 = struct {
     }
 };
 
+/// TRLWE FFT structure for efficient operations
+pub const TRLWELv1FFT = struct {
+    a: [1024]f64,
+    b: [1024]f64,
+
+    const Self = @This();
+
+    pub fn init() Self {
+        return Self{
+            .a = [_]f64{0.0} ** 1024,
+            .b = [_]f64{0.0} ** 1024,
+        };
+    }
+
+    pub fn initFromTrlwe(trlwe: *const TRLWELv1, plan: *fft.FFTPlan, allocator: std.mem.Allocator) !Self {
+        var result = Self.init();
+
+        // Convert a polynomial to frequency domain
+        const a_fft = try plan.processor.ifft(trlwe.a[0..]);
+        defer allocator.free(a_fft);
+
+        // Convert b polynomial to frequency domain
+        const b_fft = try plan.processor.ifft(trlwe.b[0..]);
+        defer allocator.free(b_fft);
+
+        // Copy to fixed-size arrays
+        for (0..1024) |i| {
+            result.a[i] = a_fft[i];
+            result.b[i] = b_fft[i];
+        }
+
+        return result;
+    }
+};
+
 // ============================================================================
 // TESTS
 // ============================================================================
