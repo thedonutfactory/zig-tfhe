@@ -369,11 +369,11 @@ pub fn blindRotate(
             res2.b[j] = res_b_rotated[j];
         }
 
-        // Convert bootstrapping key to FFT form
-        const bk_fft = try TRGSWLv1FFT.init(&cloud_key.bootstrapping_key[i], &plan, allocator);
+        // Bootstrapping key is already in FFT form
+        const bk_fft = &cloud_key.bootstrapping_key[i];
 
         // CMUX operation: result = cmux(result, res2, bk_fft)
-        result = try cmux(&result, &res2, &bk_fft, cloud_key, &plan, allocator);
+        result = try cmux(&result, &res2, bk_fft, cloud_key, &plan, allocator);
     }
 
     return result;
@@ -386,13 +386,19 @@ pub fn sampleExtractIndex(
 ) tlwe.TLWELv1 {
     var result = tlwe.TLWELv1.init();
 
-    // Extract coefficient k from the TRLWE ciphertext
-    for (0..params.implementation.tlwe_lv1.N) |i| {
-        result.p[i] = trlwe_ct.a[(i + k) % params.implementation.trlwe_lv1.N];
+    const N = params.implementation.trlwe_lv1.N;
+
+    // Extract coefficient k from the TRLWE ciphertext using negacyclic logic
+    for (0..N) |i| {
+        if (i <= k) {
+            result.p[i] = trlwe_ct.a[k - i];
+        } else {
+            result.p[i] = @as(params.Torus, @intCast(params.TORUS_SIZE)) -% trlwe_ct.a[N + k - i];
+        }
     }
 
     // Set the constant term
-    result.p[params.implementation.tlwe_lv1.N] = trlwe_ct.b[k];
+    result.p[N] = trlwe_ct.b[k];
 
     return result;
 }
@@ -404,13 +410,20 @@ pub fn sampleExtractIndex2(
 ) tlwe.TLWELv0 {
     var result = tlwe.TLWELv0.init();
 
-    // Extract coefficient k from the TRLWE ciphertext
-    for (0..params.implementation.tlwe_lv0.N) |i| {
-        result.p[i] = trlwe_ct.a[(i + k) % params.implementation.trlwe_lv1.N];
+    const N = params.implementation.tlwe_lv0.N;
+    const TRLWE_N = params.implementation.trlwe_lv1.N;
+
+    // Extract coefficient k from the TRLWE ciphertext using negacyclic logic
+    for (0..N) |i| {
+        if (i <= k) {
+            result.p[i] = trlwe_ct.a[k - i];
+        } else {
+            result.p[i] = @as(params.Torus, @intCast(params.TORUS_SIZE)) -% trlwe_ct.a[TRLWE_N + k - i];
+        }
     }
 
     // Set the constant term
-    result.p[params.implementation.tlwe_lv0.N] = trlwe_ct.b[k];
+    result.p[N] = trlwe_ct.b[k];
 
     return result;
 }

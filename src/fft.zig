@@ -277,7 +277,7 @@ pub const KlemsaProcessor = struct {
                 var w_re: f64 = 1.0;
                 var w_im: f64 = 0.0;
 
-                var j: usize = 0;
+        var j: usize = 0;
                 while (j < len / 2) {
                     const u = data[i + j];
                     const v = data[i + j + len / 2].mul(Complex.new(w_re, w_im));
@@ -508,7 +508,7 @@ test "fft poly mul" {
     defer allocator.free(res);
 
     // Check accuracy
-    for (0..N) |i| {
+        for (0..N) |i| {
         const diff = if (res[i] >= fft_res[i])
             @as(u64, @intCast(res[i] - fft_res[i]))
         else
@@ -595,8 +595,8 @@ test "fft poly mul 1024" {
     for (0..100) |_| {
         var a = try allocator.alloc(params.Torus, N);
         var b = try allocator.alloc(params.Torus, N);
-        defer allocator.free(a);
-        defer allocator.free(b);
+    defer allocator.free(a);
+    defer allocator.free(b);
 
         // Generate random input
         for (0..N) |i| {

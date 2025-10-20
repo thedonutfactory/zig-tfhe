@@ -49,7 +49,7 @@ pub const CloudKey = struct {
     decomposition_offset: params.Torus,
     blind_rotate_testvec: trlwe.TRLWELv1,
     key_switching_key: []tlwe.TLWELv0,
-    bootstrapping_key: []trgsw.TRGSWLv1,
+    bootstrapping_key: []trgsw.TRGSWLv1FFT,
 
     const Self = @This();
 
@@ -74,9 +74,9 @@ pub const CloudKey = struct {
             ksk.* = tlwe.TLWELv0.init();
         }
 
-        const bootstrapping_key = try allocator.alloc(trgsw.TRGSWLv1, params.implementation.tlwe_lv0.N);
+        const bootstrapping_key = try allocator.alloc(trgsw.TRGSWLv1FFT, params.implementation.tlwe_lv0.N);
         for (bootstrapping_key) |*bsk| {
-            bsk.* = trgsw.TRGSWLv1.init();
+            bsk.* = trgsw.TRGSWLv1FFT.init();
         }
 
         return Self{
@@ -151,8 +151,8 @@ pub fn genKeySwitchingKey(allocator: std.mem.Allocator, secret_key: *const Secre
 }
 
 /// Generate bootstrapping key
-pub fn genBootstrappingKey(allocator: std.mem.Allocator, secret_key: *const SecretKey) ![]trgsw.TRGSWLv1 {
-    const res = try allocator.alloc(trgsw.TRGSWLv1, params.implementation.tlwe_lv0.N);
+pub fn genBootstrappingKey(allocator: std.mem.Allocator, secret_key: *const SecretKey) ![]trgsw.TRGSWLv1FFT {
+    const res = try allocator.alloc(trgsw.TRGSWLv1FFT, params.implementation.tlwe_lv0.N);
 
     // Generate TRGSW encryptions for each coefficient of the level 0 key
     for (0..params.implementation.tlwe_lv0.N) |i| {
@@ -165,8 +165,8 @@ pub fn genBootstrappingKey(allocator: std.mem.Allocator, secret_key: *const Secr
         // Create TRGSW encryption of the key value
         const trgsw_enc = try trgsw.TRGSWLv1.encryptTorus(kval, params.BSK_ALPHA, &secret_key.key_lv1, &plan, allocator);
 
-        // Store the TRGSW encryption directly
-        res[i] = trgsw_enc;
+        // Convert to FFT form
+        res[i] = try trgsw.TRGSWLv1FFT.init(&trgsw_enc, &plan, allocator);
     }
 
     return res;

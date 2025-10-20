@@ -27,6 +27,18 @@ pub const TLWELv1 = struct {
     pub fn bMut(self: *Self) *params.Torus {
         return &self.p[params.implementation.tlwe_lv1.N];
     }
+
+    /// Decrypt TLWELv1 to boolean using level 1 key
+    pub fn decryptBool(self: *const Self, key: *const key_module.SecretKeyLv1) bool {
+        var inner_product: params.Torus = 0;
+        for (0..key.len) |i| {
+            inner_product = inner_product +% (self.p[i] *% key[i]);
+        }
+
+        const diff = self.b() -% inner_product;
+        const value = @as(i32, @intCast(diff));
+        return value < 0;
+    }
 };
 
 /// TLWE (Torus Learning With Errors) level 0 ciphertext
