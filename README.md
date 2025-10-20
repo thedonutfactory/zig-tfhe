@@ -39,7 +39,7 @@ zig-tfhe is a comprehensive homomorphic encryption library that enables computat
 ### Building
 
 ```bash
-git clone <repository>
+git clone https://github.com/thedonutfactory/zig-tfhe
 cd zig-tfhe
 zig build
 ```
