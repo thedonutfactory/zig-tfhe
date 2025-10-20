@@ -270,11 +270,11 @@ test "cloud key generation" {
     const allocator = std.testing.allocator;
     const secret_key = try SecretKey.init(allocator);
     var cloud_key = try CloudKey.init(allocator, &secret_key);
-    defer cloud_key.deinit();
+    defer cloud_key.deinit(allocator);
     
     // Check that all components are initialized
-    try std.testing.expect(cloud_key.key_switching_key.items.len > 0);
-    try std.testing.expect(cloud_key.bootstrapping_key.items.len > 0);
+    try std.testing.expect(cloud_key.key_switching_key.len > 0);
+    try std.testing.expect(cloud_key.bootstrapping_key.len > 0);
 }
 
 test "decomposition offset" {
