@@ -12,8 +12,8 @@ pub fn main() !void {
     // Generate keys
     std.log.info("Generating keys...", .{});
     const secret_key = try tfhe.key.SecretKey.init(allocator);
-    const cloud_key = try tfhe.key.CloudKey.init(allocator, &secret_key);
-    defer cloud_key.deinit();
+    var cloud_key = try tfhe.key.CloudKey.init(allocator, &secret_key);
+    defer cloud_key.deinit(allocator);
 
     std.log.info("Keys generated successfully", .{});
 

@@ -1,5 +1,5 @@
 const std = @import("std");
-const tfhe = @import("../src/main.zig");
+const tfhe = @import("main.zig");
 
 /// Example: Add two numbers homomorphically
 pub fn main() !void {
