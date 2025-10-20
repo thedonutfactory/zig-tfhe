@@ -130,12 +130,12 @@ pub fn polyMulWithXK(
         }
         // Handle wraparound with negation (negacyclic property)
         for (N - k..N) |i| {
-            result[i + k - N] = @as(params.Torus, @intCast(params.TORUS_SIZE)) -% a[i];
+            result[i + k - N] = 0 -% a[i];
         }
     } else {
         // Handle case where k >= N
         for (0..2 * N - k) |i| {
-            result[i + k - N] = @as(params.Torus, @intCast(params.TORUS_SIZE)) -% a[i];
+            result[i + k - N] = 0 -% a[i];
         }
         for (2 * N - k..N) |i| {
             result[i - (2 * N - k)] = a[i];
@@ -283,6 +283,13 @@ pub const TRGSWLv1FFT = struct {
 
         return result;
     }
+
+    /// Initialize an empty TRGSWLv1FFT for testing purposes
+    pub fn initEmpty() Self {
+        return Self{
+            .trlwe_fft_array = [_]trlwe.TRLWELv1FFT{trlwe.TRLWELv1FFT.init()} ** (params.implementation.trgsw_lv1.L * 2),
+        };
+    }
 };
 
 /// CMUX (Conditional Multiplexer) operation
@@ -335,7 +342,7 @@ pub fn blindRotate(
     defer plan.deinit();
 
     // Compute b_tilda for initial rotation
-    const b_tilda = 2 * N - (((src.b() +% (1 << (params.TORUS_SIZE - 1 - NBIT - 1))) >> (params.TORUS_SIZE - NBIT - 1)));
+    const b_tilda = 2 * N - (((@as(usize, @intCast(src.b())) + (1 << (params.TORUS_SIZE - 1 - NBIT - 1))) >> (params.TORUS_SIZE - NBIT - 1)));
 
     // Initialize result with rotated test vector
     const testvec_a_rotated = try polyMulWithXK(cloud_key.blind_rotate_testvec.a[0..N], b_tilda, allocator);
@@ -351,7 +358,7 @@ pub fn blindRotate(
 
     // Iterate through each coefficient of the input ciphertext
     for (0..params.implementation.tlwe_lv0.N) |i| {
-        const a_tilda = ((src.p[i] +% (1 << (params.TORUS_SIZE - 1 - NBIT - 1))) >> (params.TORUS_SIZE - NBIT - 1));
+        const a_tilda = @as(usize, @intCast((src.p[i] +% (1 << (params.TORUS_SIZE - 1 - NBIT - 1))) >> (params.TORUS_SIZE - NBIT - 1)));
 
         // Create rotated version of current result
         const res_a_rotated = try polyMulWithXK(result.a[0..N], a_tilda, allocator);
@@ -389,7 +396,7 @@ pub fn sampleExtractIndex(
         if (i <= k) {
             result.p[i] = trlwe_ct.a[k - i];
         } else {
-            result.p[i] = @as(params.Torus, @intCast(params.TORUS_SIZE)) -% trlwe_ct.a[N + k - i];
+            result.p[i] = 0 -% trlwe_ct.a[N + k - i];
         }
     }
 
@@ -414,7 +421,7 @@ pub fn sampleExtractIndex2(
         if (i <= k) {
             result.p[i] = trlwe_ct.a[k - i];
         } else {
-            result.p[i] = @as(params.Torus, @intCast(params.TORUS_SIZE)) -% trlwe_ct.a[TRLWE_N + k - i];
+            result.p[i] = 0 -% trlwe_ct.a[TRLWE_N + k - i];
         }
     }
 

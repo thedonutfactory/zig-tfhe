@@ -76,7 +76,7 @@ pub const CloudKey = struct {
 
         const bootstrapping_key = try allocator.alloc(trgsw.TRGSWLv1FFT, params.implementation.tlwe_lv0.N);
         for (bootstrapping_key) |*bsk| {
-            bsk.* = trgsw.TRGSWLv1FFT.init();
+            bsk.* = trgsw.TRGSWLv1FFT.initEmpty();
         }
 
         return Self{

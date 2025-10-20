@@ -36,8 +36,8 @@ pub const TLWELv1 = struct {
         }
 
         const diff = self.b() -% inner_product;
-        const value = @as(i32, @intCast(diff));
-        return value < 0;
+        // Convert torus value to signed: if diff < TORUS_SIZE/2, it's positive (>= 0)
+        return diff < params.TORUS_SIZE / 2;
     }
 };
 

@@ -97,7 +97,8 @@ pub const Gates = struct {
 
 test "gates initialization" {
     const allocator = std.testing.allocator;
-    var cloud_key = try key.CloudKey.initNoKsk(allocator);
+    var secret_key = try key.SecretKey.init(allocator);
+    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
     defer cloud_key.deinit(allocator);
 
     _ = Gates.init(allocator, &cloud_key);
@@ -108,10 +109,9 @@ test "gates initialization" {
 
 test "homomorphic AND gate" {
     const allocator = std.testing.allocator;
-    var cloud_key = try key.CloudKey.initNoKsk(allocator);
-    defer cloud_key.deinit(allocator);
-
     var secret_key = try key.SecretKey.init(allocator);
+    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
+    defer cloud_key.deinit(allocator);
 
     var gates_impl = Gates.init(allocator, &cloud_key);
 
@@ -136,10 +136,9 @@ test "homomorphic AND gate" {
 
 test "homomorphic OR gate" {
     const allocator = std.testing.allocator;
-    var cloud_key = try key.CloudKey.initNoKsk(allocator);
-    defer cloud_key.deinit(allocator);
-
     var secret_key = try key.SecretKey.init(allocator);
+    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
+    defer cloud_key.deinit(allocator);
 
     var gates_impl = Gates.init(allocator, &cloud_key);
 
@@ -164,10 +163,9 @@ test "homomorphic OR gate" {
 
 test "homomorphic XOR gate" {
     const allocator = std.testing.allocator;
-    var cloud_key = try key.CloudKey.initNoKsk(allocator);
-    defer cloud_key.deinit(allocator);
-
     var secret_key = try key.SecretKey.init(allocator);
+    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
+    defer cloud_key.deinit(allocator);
 
     var gates_impl = Gates.init(allocator, &cloud_key);
 
@@ -192,10 +190,9 @@ test "homomorphic XOR gate" {
 
 test "homomorphic NOT gate" {
     const allocator = std.testing.allocator;
-    var cloud_key = try key.CloudKey.initNoKsk(allocator);
-    defer cloud_key.deinit(allocator);
-
     var secret_key = try key.SecretKey.init(allocator);
+    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
+    defer cloud_key.deinit(allocator);
 
     var gates_impl = Gates.init(allocator, &cloud_key);
 
@@ -215,10 +212,9 @@ test "homomorphic NOT gate" {
 
 test "homomorphic MUX gate" {
     const allocator = std.testing.allocator;
-    var cloud_key = try key.CloudKey.initNoKsk(allocator);
-    defer cloud_key.deinit(allocator);
-
     var secret_key = try key.SecretKey.init(allocator);
+    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
+    defer cloud_key.deinit(allocator);
 
     var gates_impl = Gates.init(allocator, &cloud_key);
 
@@ -244,10 +240,9 @@ test "homomorphic MUX gate" {
 
 test "gates truth table verification" {
     const allocator = std.testing.allocator;
-    var cloud_key = try key.CloudKey.initNoKsk(allocator);
-    defer cloud_key.deinit(allocator);
-
     var secret_key = try key.SecretKey.init(allocator);
+    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
+    defer cloud_key.deinit(allocator);
 
     var gates_impl = Gates.init(allocator, &cloud_key);
 
@@ -279,10 +274,9 @@ test "gates truth table verification" {
 
 test "gates noise management" {
     const allocator = std.testing.allocator;
-    var cloud_key = try key.CloudKey.initNoKsk(allocator);
-    defer cloud_key.deinit(allocator);
-
     var secret_key = try key.SecretKey.init(allocator);
+    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
+    defer cloud_key.deinit(allocator);
 
     var gates_impl = Gates.init(allocator, &cloud_key);
 
@@ -303,10 +297,9 @@ test "gates noise management" {
 
 test "chained AND operations" {
     const allocator = std.testing.allocator;
-    var cloud_key = try key.CloudKey.initNoKsk(allocator);
-    defer cloud_key.deinit(allocator);
-
     var secret_key = try key.SecretKey.init(allocator);
+    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
+    defer cloud_key.deinit(allocator);
 
     var gates_impl = Gates.init(allocator, &cloud_key);
 
@@ -325,10 +318,9 @@ test "chained AND operations" {
 
 test "chained OR operations" {
     const allocator = std.testing.allocator;
-    var cloud_key = try key.CloudKey.initNoKsk(allocator);
-    defer cloud_key.deinit(allocator);
-
     var secret_key = try key.SecretKey.init(allocator);
+    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
+    defer cloud_key.deinit(allocator);
 
     var gates_impl = Gates.init(allocator, &cloud_key);
 
@@ -347,10 +339,9 @@ test "chained OR operations" {
 
 test "chained XOR operations" {
     const allocator = std.testing.allocator;
-    var cloud_key = try key.CloudKey.initNoKsk(allocator);
-    defer cloud_key.deinit(allocator);
-
     var secret_key = try key.SecretKey.init(allocator);
+    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
+    defer cloud_key.deinit(allocator);
 
     var gates_impl = Gates.init(allocator, &cloud_key);
 
@@ -369,10 +360,9 @@ test "chained XOR operations" {
 
 test "mixed chained operations" {
     const allocator = std.testing.allocator;
-    var cloud_key = try key.CloudKey.initNoKsk(allocator);
-    defer cloud_key.deinit(allocator);
-
     var secret_key = try key.SecretKey.init(allocator);
+    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
+    defer cloud_key.deinit(allocator);
 
     var gates_impl = Gates.init(allocator, &cloud_key);
 
