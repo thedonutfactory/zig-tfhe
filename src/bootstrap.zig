@@ -63,11 +63,11 @@ pub const vanilla = struct {
 
         // Step 2: Sample extraction - convert RLWE to LWE at coefficient index 0
         // This extracts one LWE ciphertext from the RLWE ciphertext
-        const tlwe_lv1 = sampleExtractIndex(&trlwe_ct, 0);
+        const tlwe_lv1 = try sampleExtractIndex(&trlwe_ct, 0);
 
         // Step 3: Key switching - convert from level 1 key back to level 0
         // This ensures the output is under the same key as the input
-        return identityKeySwitching(&tlwe_lv1, cloud_key, allocator);
+        return try identityKeySwitching(&tlwe_lv1, cloud_key, allocator);
     }
 
     /// Bootstrap without key switching - returns intermediate ciphertext for further operations
@@ -79,9 +79,9 @@ pub const vanilla = struct {
         //_ = cloud_key;
         //_ = allocator;
 
-        const trlwe_ct = blindRotate(ciphertext, cloud_key, allocator);
+        const trlwe_ct = try blindRotate(ciphertext, cloud_key, allocator);
 
-        return sampleExtractIndex2(&trlwe_ct, 0);
+        return try sampleExtractIndex2(&trlwe_ct, 0);
     }
 
     /// Blind rotation - the core operation in bootstrapping
@@ -213,23 +213,23 @@ pub const vanilla = struct {
         _ = allocator;
 
         const N: usize = params.implementation.trgsw_lv1.N;
-        const BASEBIT: usize = params.implementation.trgsw_lv1.basebit;
+        const BASEBIT: usize = params.implementation.trgsw_lv1.BASEBIT;
         const BASE: usize = 1 << BASEBIT;
-        const IKS_T: usize = params.implementation.trgsw_lv1.iks_t;
+        const IKS_T: usize = params.implementation.trgsw_lv1.IKS_T;
         var res = tlwe.TLWELv0.init();
 
-        res.p[params.implementation.tlwe_lv0.N] = tlwe_lv1.p[tlwe_lv1.p.len() - 1];
+        res.p[params.implementation.tlwe_lv0.N] = tlwe_lv1.p[params.implementation.tlwe_lv1.N];
 
         const PREC_OFFSET: params.Torus = 1 << (32 - (1 + BASEBIT * IKS_T));
 
         for (0..N) |i| {
-            const a_bar = tlwe_lv1.p[i].wrapping_add(PREC_OFFSET);
+            const a_bar = tlwe_lv1.p[i] +% PREC_OFFSET;
             for (0..IKS_T) |j| {
-                const k = (a_bar >> (32 - (j + 1) * BASEBIT)) & ((1 << BASEBIT) - 1);
+                const k = (a_bar >> @as(u5, @intCast(32 - (j + 1) * BASEBIT))) & ((1 << BASEBIT) - 1);
                 if (k != 0) {
                     const idx = (BASE * IKS_T * i) + (BASE * j) + @as(usize, @intCast(k));
-                    for (0..res.p.len()) |x| {
-                        res.p[x] = res.p[x].wrapping_sub(cloud_key.key_switching_key[idx].p[x]);
+                    for (0..params.implementation.tlwe_lv0.N + 1) |x| {
+                        res.p[x] = res.p[x] -% cloud_key.key_switching_key[idx].p[x];
                     }
                 }
             }
