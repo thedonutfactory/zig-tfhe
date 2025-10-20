@@ -6,6 +6,8 @@
 
 A high-performance Zig implementation of TFHE (Torus Fully Homomorphic Encryption).
 
+<img width="400" height="400" alt="image" src="https://github.com/user-attachments/assets/a7b395a8-46fb-4739-97d4-c6d65d21ba46" />
+
 ## Overview
 
 zig-tfhe is a comprehensive homomorphic encryption library that enables computation on encrypted data without decryption, built in Zig for performance and safety.
