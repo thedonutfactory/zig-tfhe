@@ -237,16 +237,12 @@ pub fn externalProductWithFft(
     }
 
     // Batch IFFT all decomposition digits
-    var dec_ffts = try allocator.alloc([]f64, L * 2);
+    const dec_ffts = try plan.processor.batch_ifft(dec);
     defer {
         for (dec_ffts) |fft_result| {
             allocator.free(fft_result);
         }
         allocator.free(dec_ffts);
-    }
-
-    for (0..L * 2) |i| {
-        dec_ffts[i] = try plan.processor.ifft(dec[i]);
     }
 
     // Accumulate in frequency domain
