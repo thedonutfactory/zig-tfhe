@@ -41,6 +41,15 @@ pub fn main() !void {
 
     // Test homomorphic AND gate
     var gates_impl = gates.Gates.init(allocator, &cloud_key);
+
+    // Debug: Test individual ciphertexts first
+    std.log.info("Debug: ct_true decrypts to: {}", .{ct_true.decrypt(&secret_key.key_lv0)});
+    std.log.info("Debug: ct_false decrypts to: {}", .{ct_false.decrypt(&secret_key.key_lv0)});
+
+    // Test simple addition first (without bootstrapping)
+    const simple_add = ct_true.add(&ct_false);
+    std.log.info("Debug: true + false (simple add) decrypts to: {}", .{simple_add.decrypt(&secret_key.key_lv0)});
+
     const result = try gates_impl.homAnd(&ct_true, &ct_false, allocator);
     const decrypted_result = result.decrypt(&secret_key.key_lv0);
 

@@ -44,7 +44,7 @@ pub const vanilla = struct {
 
         const trlwe_ct = try trgsw.blindRotate(ciphertext, cloud_key, allocator);
 
-        return trgsw.sampleExtractIndex2(&trlwe_ct, 0);
+        return try trgsw.sampleExtractIndex2(&trlwe_ct, 0);
     }
 
     /// Blind rotation - the core operation in bootstrapping

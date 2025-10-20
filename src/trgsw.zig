@@ -112,49 +112,268 @@ pub const TRGSWLv1 = struct {
     }
 };
 
+/// Polynomial multiplication by x^k for negacyclic polynomials
+///
+/// This implements the negacyclic polynomial multiplication where x^N = -1
+pub fn polyMulWithXK(
+    a: []const params.Torus,
+    k: usize,
+    allocator: std.mem.Allocator,
+) ![]params.Torus {
+    const N = params.implementation.trgsw_lv1.N;
+    var result = try allocator.alloc(params.Torus, N);
+
+    if (k < N) {
+        // Copy elements from position k onwards
+        for (0..N - k) |i| {
+            result[k + i] = a[i];
+        }
+        // Handle wraparound with negation (negacyclic property)
+        for (N - k..N) |i| {
+            result[i + k - N] = @as(params.Torus, @intCast(params.TORUS_SIZE)) -% a[i];
+        }
+    } else {
+        // Handle case where k >= N
+        for (0..2 * N - k) |i| {
+            result[i + k - N] = @as(params.Torus, @intCast(params.TORUS_SIZE)) -% a[i];
+        }
+        for (2 * N - k..N) |i| {
+            result[i - (2 * N - k)] = a[i];
+        }
+    }
+
+    return result;
+}
+
+/// Decomposition function for TRGSW operations
+///
+/// Decomposes a TRLWE ciphertext into its base-BG representation
+pub fn decomposition(
+    trlwe_ct: *const trlwe.TRLWELv1,
+    cloud_key: *const key_module.CloudKey,
+    allocator: std.mem.Allocator,
+) ![][]params.Torus {
+    const L = params.implementation.trgsw_lv1.L;
+    const N = params.implementation.trgsw_lv1.N;
+    const BGBIT = params.implementation.trgsw_lv1.BGBIT;
+    const MASK: params.Torus = (1 << BGBIT) - 1;
+    const HALF_BG: params.Torus = 1 << (BGBIT - 1);
+
+    var result = try allocator.alloc([]params.Torus, L * 2);
+    for (0..L * 2) |i| {
+        result[i] = try allocator.alloc(params.Torus, N);
+    }
+
+    const offset = cloud_key.decomposition_offset;
+
+    for (0..N) |j| {
+        const tmp0 = trlwe_ct.a[j] +% offset;
+        const tmp1 = trlwe_ct.b[j] +% offset;
+
+        for (0..L) |i| {
+            result[i][j] = ((tmp0 >> @as(u5, @intCast(32 - ((i + 1) * BGBIT)))) & MASK) -% HALF_BG;
+        }
+
+        for (0..L) |i| {
+            result[i + L][j] = ((tmp1 >> @as(u5, @intCast(32 - ((i + 1) * BGBIT)))) & MASK) -% HALF_BG;
+        }
+    }
+
+    return result;
+}
+
+/// FMA (Fused Multiply-Add) in frequency domain for 1024-point FFT
+///
+/// Performs complex multiply-accumulate: res += a * b
+/// with proper scaling for negacyclic FFT
+fn fmaInFd1024(
+    res: []f64,
+    a: []const f64,
+    b: []const f64,
+) void {
+    // Complex multiply-accumulate in frequency domain: res += a * b
+    // with 0.5 scaling for negacyclic FFT
+    for (0..512) |i| {
+        // Real part: res_re += (a_re*b_re - a_im*b_im) * 0.5
+        res[i] = (a[i + 512] * b[i + 512]) * 0.5 - res[i];
+        res[i] = (a[i] * b[i]) * 0.5 - res[i];
+        // Imaginary part: res_im += (a_re*b_im + a_im*b_re) * 0.5
+        res[i + 512] += (a[i] * b[i + 512] + a[i + 512] * b[i]) * 0.5;
+    }
+}
+
+/// External product with FFT for TRGSW operations
+///
+/// This is the core operation for TRGSW multiplication
+pub fn externalProductWithFft(
+    trgsw_fft: *const TRGSWLv1FFT,
+    trlwe_ct: *const trlwe.TRLWELv1,
+    cloud_key: *const key_module.CloudKey,
+    plan: *fft.FFTPlan,
+    allocator: std.mem.Allocator,
+) !trlwe.TRLWELv1 {
+    const L = params.implementation.trgsw_lv1.L;
+    const N = params.implementation.trgsw_lv1.N;
+
+    // Decompose the input TRLWE
+    const dec = try decomposition(trlwe_ct, cloud_key, allocator);
+    defer {
+        for (dec) |row| {
+            allocator.free(row);
+        }
+        allocator.free(dec);
+    }
+
+    // Initialize output arrays
+    var out_a_fft = try allocator.alloc(f64, 1024);
+    defer allocator.free(out_a_fft);
+    var out_b_fft = try allocator.alloc(f64, 1024);
+    defer allocator.free(out_b_fft);
+
+    // Initialize to zero
+    for (0..1024) |i| {
+        out_a_fft[i] = 0.0;
+        out_b_fft[i] = 0.0;
+    }
+
+    // Batch IFFT all decomposition digits
+    var dec_ffts = try allocator.alloc([]f64, L * 2);
+    defer {
+        for (dec_ffts) |fft_result| {
+            allocator.free(fft_result);
+        }
+        allocator.free(dec_ffts);
+    }
+
+    for (0..L * 2) |i| {
+        dec_ffts[i] = try plan.batchIfft(dec[i], allocator);
+    }
+
+    // Accumulate in frequency domain
+    for (0..L * 2) |i| {
+        fmaInFd1024(out_a_fft, dec_ffts[i], trgsw_fft.trlwe_fft_array[i].a[0..1024]);
+        fmaInFd1024(out_b_fft, dec_ffts[i], trgsw_fft.trlwe_fft_array[i].b[0..1024]);
+    }
+
+    // Single IFFT per output polynomial
+    const result_a = try plan.fft(out_a_fft, allocator);
+    defer allocator.free(result_a);
+    const result_b = try plan.fft(out_b_fft, allocator);
+    defer allocator.free(result_b);
+
+    var result = trlwe.TRLWELv1.init();
+    for (0..N) |i| {
+        result.a[i] = @as(params.Torus, @intFromFloat(result_a[i]));
+        result.b[i] = @as(params.Torus, @intFromFloat(result_b[i]));
+    }
+
+    return result;
+}
+
+/// TRGSW FFT structure for efficient operations
+pub const TRGSWLv1FFT = struct {
+    trlwe_fft_array: [params.implementation.trgsw_lv1.L * 2]trlwe.TRLWELv1FFT,
+
+    const Self = @This();
+
+    pub fn init(trgsw: *const TRGSWLv1, plan: *fft.FFTPlan, allocator: std.mem.Allocator) !Self {
+        var result = Self{
+            .trlwe_fft_array = [_]trlwe.TRLWELv1FFT{trlwe.TRLWELv1FFT.init()} ** (params.implementation.trgsw_lv1.L * 2),
+        };
+
+        for (0..params.implementation.trgsw_lv1.L * 2) |i| {
+            result.trlwe_fft_array[i] = try trlwe.TRLWELv1FFT.init(&trgsw.trlwe_array[i], plan, allocator);
+        }
+
+        return result;
+    }
+};
+
+/// CMUX (Conditional Multiplexer) operation
+///
+/// Returns in1 if cond == 0, else in2
+pub fn cmux(
+    in1: *const trlwe.TRLWELv1,
+    in2: *const trlwe.TRLWELv1,
+    cond: *const TRGSWLv1FFT,
+    cloud_key: *const key_module.CloudKey,
+    plan: *fft.FFTPlan,
+    allocator: std.mem.Allocator,
+) !trlwe.TRLWELv1 {
+    const N = params.implementation.trgsw_lv1.N;
+
+    // Compute difference: tmp = in2 - in1
+    var tmp = trlwe.TRLWELv1.init();
+    for (0..N) |i| {
+        tmp.a[i] = in2.a[i] -% in1.a[i];
+        tmp.b[i] = in2.b[i] -% in1.b[i];
+    }
+
+    // External product: tmp2 = cond * tmp
+    const tmp2 = try externalProductWithFft(cond, &tmp, cloud_key, plan, allocator);
+
+    // Add in1: result = tmp2 + in1
+    var result = trlwe.TRLWELv1.init();
+    for (0..N) |i| {
+        result.a[i] = tmp2.a[i] +% in1.a[i];
+        result.b[i] = tmp2.b[i] +% in1.b[i];
+    }
+
+    return result;
+}
+
 /// Blind rotation function for bootstrapping
 ///
 /// This is the core operation in TFHE bootstrapping that homomorphically
 /// evaluates a test polynomial using TRGSW operations.
 pub fn blindRotate(
     src: *const tlwe.TLWELv0,
-    _: *const key_module.CloudKey,
+    cloud_key: *const key_module.CloudKey,
     allocator: std.mem.Allocator,
 ) !trlwe.TRLWELv1 {
-    const N = params.implementation.trlwe_lv1.N;
+    const N = params.implementation.trgsw_lv1.N;
+    const NBIT = params.implementation.trgsw_lv1.NBIT;
 
     // Create FFT plan for TRLWE operations
     var plan = try fft.FFTPlan.new(allocator, N);
     defer plan.deinit();
 
-    // Initialize result TRLWE
+    // Compute b_tilda for initial rotation
+    const b_tilda = 2 * N - (((src.b() +% (1 << (params.TORUS_SIZE - 1 - NBIT - 1))) >> (params.TORUS_SIZE - NBIT - 1)));
+
+    // Initialize result with rotated test vector
+    const testvec_a_rotated = try polyMulWithXK(cloud_key.blind_rotate_testvec.a[0..N], b_tilda, allocator);
+    defer allocator.free(testvec_a_rotated);
+    const testvec_b_rotated = try polyMulWithXK(cloud_key.blind_rotate_testvec.b[0..N], b_tilda, allocator);
+    defer allocator.free(testvec_b_rotated);
+
     var result = trlwe.TRLWELv1.init();
-
-    // For now, implement a simplified blind rotation
-    // In a full implementation, this would:
-    // 1. Extract the message from the input ciphertext
-    // 2. Use TRGSW operations to homomorphically evaluate a test polynomial
-    // 3. Return the result as a TRLWE ciphertext
-
-    // Simplified implementation: create a test polynomial based on the input message
-    const message = src.b();
-
-    // Create a test polynomial where the constant term is the input message
-    // This is a placeholder - the real implementation would use proper TRGSW operations
     for (0..N) |i| {
-        if (i < params.implementation.tlwe_lv0.N) {
-            result.a[i] = src.p[i];
-        } else {
-            result.a[i] = 0;
-        }
+        result.a[i] = testvec_a_rotated[i];
+        result.b[i] = testvec_b_rotated[i];
     }
 
-    // Set the test polynomial's constant term to preserve the message
-    result.b[0] = message;
+    // Iterate through each coefficient of the input ciphertext
+    for (0..params.implementation.tlwe_lv0.N) |i| {
+        const a_tilda = ((src.p[i] +% (1 << (params.TORUS_SIZE - 1 - NBIT - 1))) >> (params.TORUS_SIZE - NBIT - 1));
 
-    // All other b coefficients are zero for the identity function
-    for (1..N) |i| {
-        result.b[i] = 0;
+        // Create rotated version of current result
+        const res_a_rotated = try polyMulWithXK(result.a[0..N], a_tilda, allocator);
+        defer allocator.free(res_a_rotated);
+        const res_b_rotated = try polyMulWithXK(result.b[0..N], a_tilda, allocator);
+        defer allocator.free(res_b_rotated);
+
+        var res2 = trlwe.TRLWELv1.init();
+        for (0..N) |j| {
+            res2.a[j] = res_a_rotated[j];
+            res2.b[j] = res_b_rotated[j];
+        }
+
+        // Convert bootstrapping key to FFT form
+        const bk_fft = try TRGSWLv1FFT.init(&cloud_key.bootstrapping_key[i], &plan, allocator);
+
+        // CMUX operation: result = cmux(result, res2, bk_fft)
+        result = try cmux(&result, &res2, &bk_fft, cloud_key, &plan, allocator);
     }
 
     return result;
