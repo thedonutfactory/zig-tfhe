@@ -42,8 +42,7 @@ pub const TRLWELv1 = struct {
 
         // Generate noise for b coefficients
         var normal_distr = utils.NormalDistribution.init(0.0, alpha);
-        var rng = utils.PseudoRng.init(42);
-        const noise_vec = try utils.gaussianF64Vec(p, &normal_distr, &rng, allocator);
+        const noise_vec = try utils.gaussianF64Vec(p, &normal_distr, allocator);
         defer allocator.free(noise_vec);
 
         // Copy to fixed-size array

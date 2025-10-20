@@ -17,19 +17,19 @@ pub const SecretKey = struct {
 
     const Self = @This();
 
-    /// Initialize a new secret key with random values (simplified)
+    /// Initialize a new secret key with random values
     pub fn init(_: std.mem.Allocator) !Self {
         var key = Self{
             .key_lv0 = [_]params.Torus{0} ** params.implementation.tlwe_lv0.N,
             .key_lv1 = [_]params.Torus{0} ** params.implementation.tlwe_lv1.N,
         };
 
-        // Generate simple binary keys
-        for (&key.key_lv0, 0..) |*k, i| {
-            k.* = if (i % 2 == 0) 1 else 0;
+        // Generate random binary keys using cryptographically secure random number generator
+        for (&key.key_lv0) |*k| {
+            k.* = if (std.crypto.random.boolean()) 1 else 0;
         }
-        for (&key.key_lv1, 0..) |*k, i| {
-            k.* = if (i % 3 == 0) 1 else 0;
+        for (&key.key_lv1) |*k| {
+            k.* = if (std.crypto.random.boolean()) 1 else 0;
         }
 
         return key;
@@ -154,19 +154,18 @@ pub fn genKeySwitchingKey(allocator: std.mem.Allocator, secret_key: *const Secre
 pub fn genBootstrappingKey(allocator: std.mem.Allocator, secret_key: *const SecretKey) ![]trgsw.TRGSWLv1FFT {
     const res = try allocator.alloc(trgsw.TRGSWLv1FFT, params.implementation.tlwe_lv0.N);
 
+    // Use thread-local FFT plan (matches Rust's FFT_PLAN approach)
+    const plan = try fft.getFFTPlan(allocator);
+
     // Generate TRGSW encryptions for each coefficient of the level 0 key
     for (0..params.implementation.tlwe_lv0.N) |i| {
         const kval = secret_key.key_lv0[i];
 
-        // Create FFT plan for TRGSW operations
-        var plan = try fft.FFTPlan.new(allocator, params.implementation.trlwe_lv1.N);
-        defer plan.deinit();
+        // Create TRGSW encryption of the key value using shared FFT plan
+        const trgsw_enc = try trgsw.TRGSWLv1.encryptTorus(kval, params.BSK_ALPHA, &secret_key.key_lv1, plan, allocator);
 
-        // Create TRGSW encryption of the key value
-        const trgsw_enc = try trgsw.TRGSWLv1.encryptTorus(kval, params.BSK_ALPHA, &secret_key.key_lv1, &plan, allocator);
-
-        // Convert to FFT form
-        res[i] = try trgsw.TRGSWLv1FFT.init(&trgsw_enc, &plan, allocator);
+        // Convert to FFT form using shared FFT plan
+        res[i] = try trgsw.TRGSWLv1FFT.init(&trgsw_enc, plan, allocator);
     }
 
     return res;

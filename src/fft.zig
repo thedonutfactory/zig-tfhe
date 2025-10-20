@@ -277,7 +277,7 @@ pub const KlemsaProcessor = struct {
                 var w_re: f64 = 1.0;
                 var w_im: f64 = 0.0;
 
-        var j: usize = 0;
+                var j: usize = 0;
                 while (j < len / 2) {
                     const u = data[i + j];
                     const v = data[i + j + len / 2].mul(Complex.new(w_re, w_im));
@@ -508,7 +508,7 @@ test "fft poly mul" {
     defer allocator.free(res);
 
     // Check accuracy
-        for (0..N) |i| {
+    for (0..N) |i| {
         const diff = if (res[i] >= fft_res[i])
             @as(u64, @intCast(res[i] - fft_res[i]))
         else
@@ -595,8 +595,8 @@ test "fft poly mul 1024" {
     for (0..100) |_| {
         var a = try allocator.alloc(params.Torus, N);
         var b = try allocator.alloc(params.Torus, N);
-    defer allocator.free(a);
-    defer allocator.free(b);
+        defer allocator.free(a);
+        defer allocator.free(b);
 
         // Generate random input
         for (0..N) |i| {
@@ -650,4 +650,35 @@ test "klemsa roundtrip" {
 
     std.debug.print("Klemsa roundtrip error: {}\n", .{max_diff});
     try std.testing.expect(max_diff < 2);
+}
+
+// ============================================================================
+// THREAD-LOCAL FFT PLAN (similar to Rust's FFT_PLAN)
+// ============================================================================
+
+/// Thread-local FFT plan for efficient reuse (matches Rust's FFT_PLAN)
+pub threadlocal var FFT_PLAN: ?FFTPlan = null;
+
+/// Get or create the thread-local FFT plan
+pub fn getFFTPlan(allocator: std.mem.Allocator) !*FFTPlan {
+    if (FFT_PLAN == null) {
+        FFT_PLAN = try FFTPlan.new(allocator, params.implementation.trgsw_lv1.N);
+    }
+    return &FFT_PLAN.?;
+}
+
+/// Clean up the thread-local FFT plan
+pub fn cleanupFFTPlan() void {
+    if (FFT_PLAN) |*plan| {
+        plan.deinit();
+        FFT_PLAN = null;
+    }
+}
+
+/// Clean up the thread-local FFT plan with allocator
+pub fn cleanupFFTPlanWithAllocator(_: std.mem.Allocator) void {
+    if (FFT_PLAN) |*plan| {
+        plan.deinit();
+        FFT_PLAN = null;
+    }
 }

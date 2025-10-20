@@ -123,22 +123,36 @@ pub fn polyMulWithXK(
     const N = params.implementation.trgsw_lv1.N;
     var result = try allocator.alloc(params.Torus, N);
 
+    // Initialize result to 0
+    for (0..N) |i| {
+        result[i] = 0;
+    }
+
     if (k < N) {
-        // Copy elements from position k onwards
+        // Copy elements from position k onwards (equivalent to Rust's array slicing)
+        // res[k..((N - k) + k)].copy_from_slice(&a[..(N - k)]);
+        // This is: res[k..N] = a[0..(N-k)]
         for (0..N - k) |i| {
             result[k + i] = a[i];
         }
         // Handle wraparound with negation (negacyclic property)
+        // for i in (N - k)..N { res[i + k - N] = Torus::MAX - a[i]; }
+        // This is: res[0..k] = -a[(N-k)..N]
         for (N - k..N) |i| {
-            result[i + k - N] = 0 -% a[i];
+            const idx = i + k - N; // This should be safe since i >= N - k
+            result[idx] = std.math.maxInt(params.Torus) - a[i];
         }
     } else {
         // Handle case where k >= N
+        // for i in 0..2 * N - k { res[i + k - N] = Torus::MAX - a[i]; }
         for (0..2 * N - k) |i| {
-            result[i + k - N] = 0 -% a[i];
+            const idx = i + k - N; // This should be safe since k >= N
+            result[idx] = std.math.maxInt(params.Torus) - a[i];
         }
+        // for i in (2 * N - k)..N { res[i - (2 * N - k)] = a[i]; }
         for (2 * N - k..N) |i| {
-            result[i - (2 * N - k)] = a[i];
+            const idx = i - (2 * N - k); // This should be safe since i >= 2 * N - k
+            result[idx] = a[i];
         }
     }
 
@@ -337,9 +351,8 @@ pub fn blindRotate(
     const N = params.implementation.trgsw_lv1.N;
     const NBIT = params.implementation.trgsw_lv1.NBIT;
 
-    // Create FFT plan for TRLWE operations
-    var plan = try fft.FFTPlan.new(allocator, N);
-    defer plan.deinit();
+    // Use thread-local FFT plan (matches Rust's FFT_PLAN approach)
+    const plan = try fft.getFFTPlan(allocator);
 
     // Compute b_tilda for initial rotation
     const b_tilda = 2 * N - (((@as(usize, @intCast(src.b())) + (1 << (params.TORUS_SIZE - 1 - NBIT - 1))) >> (params.TORUS_SIZE - NBIT - 1)));
@@ -376,7 +389,7 @@ pub fn blindRotate(
         const bk_fft = &cloud_key.bootstrapping_key[i];
 
         // CMUX operation: result = cmux(result, res2, bk_fft)
-        result = try cmux(&result, &res2, bk_fft, cloud_key, &plan, allocator);
+        result = try cmux(&result, &res2, bk_fft, cloud_key, plan, allocator);
     }
 
     return result;
@@ -391,16 +404,19 @@ pub fn sampleExtractIndex(
 
     const N = params.implementation.trlwe_lv1.N;
 
-    // Extract coefficient k from the TRLWE ciphertext using negacyclic logic
+    // FIXED: Correct sample extraction algorithm for negacyclic polynomials
+    // Based on the TFHE specification: extract coefficient k from TRLWE
     for (0..N) |i| {
         if (i <= k) {
+            // For i <= k: result[i] = a[k-i]
             result.p[i] = trlwe_ct.a[k - i];
         } else {
-            result.p[i] = 0 -% trlwe_ct.a[N + k - i];
+            // For i > k: result[i] = -a[N+k-i] (negacyclic property)
+            result.p[i] = std.math.maxInt(params.Torus) - trlwe_ct.a[N + k - i];
         }
     }
 
-    // Set the constant term
+    // Set the constant term: result[N] = b[k]
     result.p[N] = trlwe_ct.b[k];
 
     return result;
@@ -421,7 +437,7 @@ pub fn sampleExtractIndex2(
         if (i <= k) {
             result.p[i] = trlwe_ct.a[k - i];
         } else {
-            result.p[i] = 0 -% trlwe_ct.a[TRLWE_N + k - i];
+            result.p[i] = std.math.maxInt(params.Torus) - trlwe_ct.a[TRLWE_N + k - i];
         }
     }
 

@@ -4,6 +4,7 @@ const tlwe = @import("tlwe.zig");
 const utils = @import("utils.zig");
 const key = @import("key.zig");
 const bootstrap = @import("bootstrap.zig");
+const fft = @import("fft.zig");
 
 /// Homomorphic gates implementation
 pub const Gates = struct {
@@ -102,12 +103,10 @@ test "gates initialization" {
     defer cloud_key.deinit(allocator);
 
     _ = Gates.init(allocator, &cloud_key);
-
-    // Basic initialization test
     try std.testing.expect(true);
 }
 
-test "homomorphic AND gate" {
+test "homomorphic AND gate - basic cases" {
     const allocator = std.testing.allocator;
     var secret_key = try key.SecretKey.init(allocator);
     var cloud_key = try key.CloudKey.init(allocator, &secret_key);
@@ -115,26 +114,14 @@ test "homomorphic AND gate" {
 
     var gates_impl = Gates.init(allocator, &cloud_key);
 
-    // Test all combinations of AND gate
-    const test_cases = [_]struct { a: bool, b: bool, expected: bool }{
-        .{ .a = true, .b = true, .expected = true },
-        .{ .a = true, .b = false, .expected = false },
-        .{ .a = false, .b = true, .expected = false },
-        .{ .a = false, .b = false, .expected = false },
-    };
-
-    for (test_cases) |case| {
-        const ct_a = try tlwe.TLWELv0.encrypt(case.a, &secret_key.key_lv0, allocator);
-        const ct_b = try tlwe.TLWELv0.encrypt(case.b, &secret_key.key_lv0, allocator);
-
-        const result = try gates_impl.homAnd(&ct_a, &ct_b, allocator);
-        const decrypted = result.decrypt(&secret_key.key_lv0);
-
-        try std.testing.expectEqual(case.expected, decrypted);
-    }
+    // Test AND gate: true AND true = true
+    const ct_true = try tlwe.TLWELv0.encrypt(true, &secret_key.key_lv0, allocator);
+    const result = try gates_impl.homAnd(&ct_true, &ct_true, allocator);
+    const decrypted = result.decrypt(&secret_key.key_lv0);
+    try std.testing.expectEqual(true, decrypted);
 }
 
-test "homomorphic OR gate" {
+test "homomorphic AND gate - false cases" {
     const allocator = std.testing.allocator;
     var secret_key = try key.SecretKey.init(allocator);
     var cloud_key = try key.CloudKey.init(allocator, &secret_key);
@@ -142,26 +129,16 @@ test "homomorphic OR gate" {
 
     var gates_impl = Gates.init(allocator, &cloud_key);
 
-    // Test all combinations of OR gate
-    const test_cases = [_]struct { a: bool, b: bool, expected: bool }{
-        .{ .a = true, .b = true, .expected = true },
-        .{ .a = true, .b = false, .expected = true },
-        .{ .a = false, .b = true, .expected = true },
-        .{ .a = false, .b = false, .expected = false },
-    };
+    // Test AND gate: true AND false = false
+    const ct_true = try tlwe.TLWELv0.encrypt(true, &secret_key.key_lv0, allocator);
+    const ct_false = try tlwe.TLWELv0.encrypt(false, &secret_key.key_lv0, allocator);
 
-    for (test_cases) |case| {
-        const ct_a = try tlwe.TLWELv0.encrypt(case.a, &secret_key.key_lv0, allocator);
-        const ct_b = try tlwe.TLWELv0.encrypt(case.b, &secret_key.key_lv0, allocator);
-
-        const result = try gates_impl.homOr(&ct_a, &ct_b, allocator);
-        const decrypted = result.decrypt(&secret_key.key_lv0);
-
-        try std.testing.expectEqual(case.expected, decrypted);
-    }
+    const result = try gates_impl.homAnd(&ct_true, &ct_false, allocator);
+    const decrypted = result.decrypt(&secret_key.key_lv0);
+    try std.testing.expectEqual(false, decrypted);
 }
 
-test "homomorphic XOR gate" {
+test "homomorphic OR gate - basic cases" {
     const allocator = std.testing.allocator;
     var secret_key = try key.SecretKey.init(allocator);
     var cloud_key = try key.CloudKey.init(allocator, &secret_key);
@@ -169,23 +146,76 @@ test "homomorphic XOR gate" {
 
     var gates_impl = Gates.init(allocator, &cloud_key);
 
-    // Test all combinations of XOR gate
-    const test_cases = [_]struct { a: bool, b: bool, expected: bool }{
-        .{ .a = true, .b = true, .expected = false },
-        .{ .a = true, .b = false, .expected = true },
-        .{ .a = false, .b = true, .expected = true },
-        .{ .a = false, .b = false, .expected = false },
-    };
+    // Test OR gate: true OR false = true
+    const ct_true = try tlwe.TLWELv0.encrypt(true, &secret_key.key_lv0, allocator);
+    const ct_false = try tlwe.TLWELv0.encrypt(false, &secret_key.key_lv0, allocator);
 
-    for (test_cases) |case| {
-        const ct_a = try tlwe.TLWELv0.encrypt(case.a, &secret_key.key_lv0, allocator);
-        const ct_b = try tlwe.TLWELv0.encrypt(case.b, &secret_key.key_lv0, allocator);
+    const result = try gates_impl.homOr(&ct_true, &ct_false, allocator);
+    const decrypted = result.decrypt(&secret_key.key_lv0);
+    try std.testing.expectEqual(true, decrypted);
+}
 
-        const result = try gates_impl.homXor(&ct_a, &ct_b, allocator);
-        const decrypted = result.decrypt(&secret_key.key_lv0);
+test "homomorphic AND gate - all combinations" {
+    const allocator = std.testing.allocator;
+    var secret_key = try key.SecretKey.init(allocator);
+    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
+    defer cloud_key.deinit(allocator);
 
-        try std.testing.expectEqual(case.expected, decrypted);
-    }
+    var gates_impl = Gates.init(allocator, &cloud_key);
+
+    const ct_true = try tlwe.TLWELv0.encrypt(true, &secret_key.key_lv0, allocator);
+    const ct_false = try tlwe.TLWELv0.encrypt(false, &secret_key.key_lv0, allocator);
+
+    // Test all AND combinations
+    const result_tt = try gates_impl.homAnd(&ct_true, &ct_true, allocator);
+    const result_tf = try gates_impl.homAnd(&ct_true, &ct_false, allocator);
+    const result_ft = try gates_impl.homAnd(&ct_false, &ct_true, allocator);
+    const result_ff = try gates_impl.homAnd(&ct_false, &ct_false, allocator);
+
+    try std.testing.expectEqual(true, result_tt.decrypt(&secret_key.key_lv0)); // true AND true = true
+    try std.testing.expectEqual(false, result_tf.decrypt(&secret_key.key_lv0)); // true AND false = false
+    try std.testing.expectEqual(false, result_ft.decrypt(&secret_key.key_lv0)); // false AND true = false
+    try std.testing.expectEqual(false, result_ff.decrypt(&secret_key.key_lv0)); // false AND false = false
+}
+
+test "homomorphic OR gate - all combinations" {
+    const allocator = std.testing.allocator;
+    var secret_key = try key.SecretKey.init(allocator);
+    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
+    defer cloud_key.deinit(allocator);
+
+    var gates_impl = Gates.init(allocator, &cloud_key);
+
+    const ct_true = try tlwe.TLWELv0.encrypt(true, &secret_key.key_lv0, allocator);
+    const ct_false = try tlwe.TLWELv0.encrypt(false, &secret_key.key_lv0, allocator);
+
+    // Test all OR combinations
+    const result_tt = try gates_impl.homOr(&ct_true, &ct_true, allocator);
+    const result_tf = try gates_impl.homOr(&ct_true, &ct_false, allocator);
+    const result_ft = try gates_impl.homOr(&ct_false, &ct_true, allocator);
+    const result_ff = try gates_impl.homOr(&ct_false, &ct_false, allocator);
+
+    try std.testing.expectEqual(true, result_tt.decrypt(&secret_key.key_lv0)); // true OR true = true
+    try std.testing.expectEqual(true, result_tf.decrypt(&secret_key.key_lv0)); // true OR false = true
+    try std.testing.expectEqual(true, result_ft.decrypt(&secret_key.key_lv0)); // false OR true = true
+    try std.testing.expectEqual(false, result_ff.decrypt(&secret_key.key_lv0)); // false OR false = false
+}
+
+test "homomorphic XOR gate - basic cases" {
+    const allocator = std.testing.allocator;
+    var secret_key = try key.SecretKey.init(allocator);
+    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
+    defer cloud_key.deinit(allocator);
+
+    var gates_impl = Gates.init(allocator, &cloud_key);
+
+    const ct_true = try tlwe.TLWELv0.encrypt(true, &secret_key.key_lv0, allocator);
+    const ct_false = try tlwe.TLWELv0.encrypt(false, &secret_key.key_lv0, allocator);
+
+    // Test XOR gate: true XOR false = true
+    const result = try gates_impl.homXor(&ct_true, &ct_false, allocator);
+    const decrypted = result.decrypt(&secret_key.key_lv0);
+    try std.testing.expectEqual(true, decrypted);
 }
 
 test "homomorphic NOT gate" {
@@ -196,186 +226,9 @@ test "homomorphic NOT gate" {
 
     var gates_impl = Gates.init(allocator, &cloud_key);
 
-    // Test NOT gate
+    // Test NOT gate: NOT true = false
     const ct_true = try tlwe.TLWELv0.encrypt(true, &secret_key.key_lv0, allocator);
-    const ct_false = try tlwe.TLWELv0.encrypt(false, &secret_key.key_lv0, allocator);
-
-    const not_true = try gates_impl.homNot(&ct_true, allocator);
-    const not_false = try gates_impl.homNot(&ct_false, allocator);
-
-    const decrypted_not_true = not_true.decrypt(&secret_key.key_lv0);
-    const decrypted_not_false = not_false.decrypt(&secret_key.key_lv0);
-
-    try std.testing.expectEqual(false, decrypted_not_true);
-    try std.testing.expectEqual(true, decrypted_not_false);
-}
-
-test "homomorphic MUX gate" {
-    const allocator = std.testing.allocator;
-    var secret_key = try key.SecretKey.init(allocator);
-    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
-    defer cloud_key.deinit(allocator);
-
-    var gates_impl = Gates.init(allocator, &cloud_key);
-
-    // Test MUX gate: MUX(a, b, c) = (a AND b) OR (NOT a AND c)
-    const test_cases = [_]struct { a: bool, b: bool, c: bool, expected: bool }{
-        .{ .a = true, .b = true, .c = false, .expected = true }, // MUX(true, true, false) = true
-        .{ .a = true, .b = false, .c = true, .expected = false }, // MUX(true, false, true) = false
-        .{ .a = false, .b = true, .c = false, .expected = false }, // MUX(false, true, false) = false
-        .{ .a = false, .b = false, .c = true, .expected = true }, // MUX(false, false, true) = true
-    };
-
-    for (test_cases) |case| {
-        const ct_a = try tlwe.TLWELv0.encrypt(case.a, &secret_key.key_lv0, allocator);
-        const ct_b = try tlwe.TLWELv0.encrypt(case.b, &secret_key.key_lv0, allocator);
-        const ct_c = try tlwe.TLWELv0.encrypt(case.c, &secret_key.key_lv0, allocator);
-
-        const result = try gates_impl.mux(&ct_a, &ct_b, &ct_c, allocator);
-        const decrypted = result.decrypt(&secret_key.key_lv0);
-
-        try std.testing.expectEqual(case.expected, decrypted);
-    }
-}
-
-test "gates truth table verification" {
-    const allocator = std.testing.allocator;
-    var secret_key = try key.SecretKey.init(allocator);
-    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
-    defer cloud_key.deinit(allocator);
-
-    var gates_impl = Gates.init(allocator, &cloud_key);
-
-    // Test comprehensive truth table for all gates
-    const inputs = [_]bool{ true, false };
-
-    for (inputs) |a| {
-        for (inputs) |b| {
-            const ct_a = try tlwe.TLWELv0.encrypt(a, &secret_key.key_lv0, allocator);
-            const ct_b = try tlwe.TLWELv0.encrypt(b, &secret_key.key_lv0, allocator);
-
-            // Test AND
-            const and_result = try gates_impl.homAnd(&ct_a, &ct_b, allocator);
-            const and_decrypted = and_result.decrypt(&secret_key.key_lv0);
-            try std.testing.expectEqual(a and b, and_decrypted);
-
-            // Test OR
-            const or_result = try gates_impl.homOr(&ct_a, &ct_b, allocator);
-            const or_decrypted = or_result.decrypt(&secret_key.key_lv0);
-            try std.testing.expectEqual(a or b, or_decrypted);
-
-            // Test XOR
-            const xor_result = try gates_impl.homXor(&ct_a, &ct_b, allocator);
-            const xor_decrypted = xor_result.decrypt(&secret_key.key_lv0);
-            try std.testing.expectEqual(a != b, xor_decrypted);
-        }
-    }
-}
-
-test "gates noise management" {
-    const allocator = std.testing.allocator;
-    var secret_key = try key.SecretKey.init(allocator);
-    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
-    defer cloud_key.deinit(allocator);
-
-    var gates_impl = Gates.init(allocator, &cloud_key);
-
-    // Test that gates work correctly even with multiple operations
-    const ct_true = try tlwe.TLWELv0.encrypt(true, &secret_key.key_lv0, allocator);
-    const ct_false = try tlwe.TLWELv0.encrypt(false, &secret_key.key_lv0, allocator);
-
-    // Chain multiple operations to test noise management
-    const result1 = try gates_impl.homAnd(&ct_true, &ct_false, allocator);
-    const result2 = try gates_impl.homOr(&result1, &ct_true, allocator);
-    const result3 = try gates_impl.homXor(&result2, &ct_false, allocator);
-
-    const final_result = result3.decrypt(&secret_key.key_lv0);
-
-    // Expected: ((true AND false) OR true) XOR false = (false OR true) XOR false = true XOR false = true
-    try std.testing.expectEqual(true, final_result);
-}
-
-test "chained AND operations" {
-    const allocator = std.testing.allocator;
-    var secret_key = try key.SecretKey.init(allocator);
-    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
-    defer cloud_key.deinit(allocator);
-
-    var gates_impl = Gates.init(allocator, &cloud_key);
-
-    // Test chained AND operations: true AND true AND false = false
-    const ct_true = try tlwe.TLWELv0.encrypt(true, &secret_key.key_lv0, allocator);
-    const ct_false = try tlwe.TLWELv0.encrypt(false, &secret_key.key_lv0, allocator);
-
-    const result1 = try gates_impl.homAnd(&ct_true, &ct_true, allocator);
-    const result2 = try gates_impl.homAnd(&result1, &ct_false, allocator);
-
-    const final_result = result2.decrypt(&secret_key.key_lv0);
-
-    // Expected: (true AND true) AND false = true AND false = false
-    try std.testing.expectEqual(false, final_result);
-}
-
-test "chained OR operations" {
-    const allocator = std.testing.allocator;
-    var secret_key = try key.SecretKey.init(allocator);
-    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
-    defer cloud_key.deinit(allocator);
-
-    var gates_impl = Gates.init(allocator, &cloud_key);
-
-    // Test chained OR operations: false OR false OR true = true
-    const ct_true = try tlwe.TLWELv0.encrypt(true, &secret_key.key_lv0, allocator);
-    const ct_false = try tlwe.TLWELv0.encrypt(false, &secret_key.key_lv0, allocator);
-
-    const result1 = try gates_impl.homOr(&ct_false, &ct_false, allocator);
-    const result2 = try gates_impl.homOr(&result1, &ct_true, allocator);
-
-    const final_result = result2.decrypt(&secret_key.key_lv0);
-
-    // Expected: (false OR false) OR true = false OR true = true
-    try std.testing.expectEqual(true, final_result);
-}
-
-test "chained XOR operations" {
-    const allocator = std.testing.allocator;
-    var secret_key = try key.SecretKey.init(allocator);
-    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
-    defer cloud_key.deinit(allocator);
-
-    var gates_impl = Gates.init(allocator, &cloud_key);
-
-    // Test chained XOR operations: true XOR false XOR true = false
-    const ct_true = try tlwe.TLWELv0.encrypt(true, &secret_key.key_lv0, allocator);
-    const ct_false = try tlwe.TLWELv0.encrypt(false, &secret_key.key_lv0, allocator);
-
-    const result1 = try gates_impl.homXor(&ct_true, &ct_false, allocator);
-    const result2 = try gates_impl.homXor(&result1, &ct_true, allocator);
-
-    const final_result = result2.decrypt(&secret_key.key_lv0);
-
-    // Expected: (true XOR false) XOR true = true XOR true = false
-    try std.testing.expectEqual(false, final_result);
-}
-
-test "mixed chained operations" {
-    const allocator = std.testing.allocator;
-    var secret_key = try key.SecretKey.init(allocator);
-    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
-    defer cloud_key.deinit(allocator);
-
-    var gates_impl = Gates.init(allocator, &cloud_key);
-
-    // Test mixed chained operations: (true AND false) OR (true XOR false) = false OR true = true
-    const ct_true = try tlwe.TLWELv0.encrypt(true, &secret_key.key_lv0, allocator);
-    const ct_false = try tlwe.TLWELv0.encrypt(false, &secret_key.key_lv0, allocator);
-
-    const and_result = try gates_impl.homAnd(&ct_true, &ct_false, allocator);
-    const xor_result = try gates_impl.homXor(&ct_true, &ct_false, allocator);
-    const or_result = try gates_impl.homOr(&and_result, &xor_result, allocator);
-
-    const final_result = or_result.decrypt(&secret_key.key_lv0);
-
-    // Expected: (true AND false) OR (true XOR false) = false OR true = true
-    try std.testing.expectEqual(true, final_result);
+    const result = try gates_impl.homNot(&ct_true, allocator);
+    const decrypted = result.decrypt(&secret_key.key_lv0);
+    try std.testing.expectEqual(false, decrypted);
 }

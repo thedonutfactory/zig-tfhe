@@ -70,7 +70,7 @@ pub const TLWELv0 = struct {
     /// Encrypt a floating point value (proper LWE implementation)
     pub fn encryptF64(
         p: f64,
-        _: f64,
+        alpha: f64,
         key: *const key_module.SecretKeyLv0,
         _: std.mem.Allocator,
     ) !Self {
@@ -82,19 +82,18 @@ pub const TLWELv0 = struct {
 
         // Generate random coefficients a[i] and compute <a, s>
         for (0..params.implementation.tlwe_lv0.N) |i| {
-            // Use a more realistic pseudo-random generator for coefficients
-            const seed = @as(u64, @intCast(i)) *% 1103515245 +% 12345;
-            const rand_torus: params.Torus = @intCast(seed % std.math.pow(u64, 2, params.TORUS_SIZE));
+            // Use cryptographically secure random number generator
+            const rand_torus: params.Torus = std.crypto.random.int(params.Torus);
             tlwe.p[i] = rand_torus;
             inner_product +%= key[i] *% rand_torus;
         }
 
-        // Add small noise (simplified)
-        const noise_magnitude = @as(params.Torus, @intFromFloat(@mod(p * 1000000000.0, 100.0)));
-        const noise = if (p > 0) noise_magnitude else -%noise_magnitude;
+        // Generate proper gaussian noise
+        var normal_distr = utils.NormalDistribution.init(0.0, alpha);
+        const noise_torus = utils.gaussianF64(p, &normal_distr);
 
         // Compute b = <a, s> + m + e
-        tlwe.p[params.implementation.tlwe_lv0.N] = inner_product +% message_torus +% noise;
+        tlwe.p[params.implementation.tlwe_lv0.N] = inner_product +% message_torus +% noise_torus;
 
         return tlwe;
     }
