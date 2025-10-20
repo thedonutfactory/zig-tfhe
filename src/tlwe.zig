@@ -3,6 +3,32 @@ const params = @import("params.zig");
 const utils = @import("utils.zig");
 const key_module = @import("key.zig");
 
+/// TLWE (Torus Learning With Errors) level 1 ciphertext
+pub const TLWELv1 = struct {
+    /// Polynomial coefficients: [a_0, a_1, ..., a_{n-1}, b]
+    /// where b is the constant term and a_i are the coefficients
+    p: [params.implementation.tlwe_lv1.N + 1]params.Torus,
+
+    const Self = @This();
+
+    /// Create a new zero TLWE ciphertext
+    pub fn init() Self {
+        return Self{
+            .p = [_]params.Torus{0} ** (params.implementation.tlwe_lv1.N + 1),
+        };
+    }
+
+    /// Get the constant term (b)
+    pub fn b(self: *const Self) params.Torus {
+        return self.p[params.implementation.tlwe_lv1.N];
+    }
+
+    /// Get mutable reference to the constant term (b)
+    pub fn bMut(self: *Self) *params.Torus {
+        return &self.p[params.implementation.tlwe_lv1.N];
+    }
+};
+
 /// TLWE (Torus Learning With Errors) level 0 ciphertext
 /// This is the main ciphertext type used for homomorphic operations
 pub const TLWELv0 = struct {
@@ -52,7 +78,7 @@ pub const TLWELv0 = struct {
         }
 
         // Add small noise (simplified)
-        const noise_magnitude = @as(params.Torus, @intFromFloat(@mod(p * 1000.0, 1000.0)));
+        const noise_magnitude = @as(params.Torus, @intFromFloat(@mod(p * 1000000000.0, 100.0)));
         const noise = if (p > 0) noise_magnitude else -%noise_magnitude;
 
         // Compute b = <a, s> + m + e

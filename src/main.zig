@@ -45,8 +45,7 @@ pub fn main() !void {
     const decrypted_result = result.decrypt(&secret_key.key_lv0);
 
     std.log.info("Homomorphic AND: true AND false = {}", .{decrypted_result});
-    // Note: This is a placeholder implementation, so we don't assert on the result
-    // std.debug.assert(decrypted_result == false);
+    std.debug.assert(decrypted_result == false);
 
     std.log.info("Basic TFHE operations completed successfully!", .{});
 }
