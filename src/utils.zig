@@ -1,5 +1,35 @@
 const std = @import("std");
 const params = @import("params.zig");
+
+/// Simple normal distribution for noise generation
+pub const NormalDistribution = struct {
+    mean: f64,
+    stddev: f64,
+
+    pub fn init(mean: f64, stddev: f64) NormalDistribution {
+        return NormalDistribution{ .mean = mean, .stddev = stddev };
+    }
+
+    pub fn sample(self: *const NormalDistribution, rng: *PseudoRng) f64 {
+        _ = self;
+        // Simplified implementation - return small random value
+        return @as(f64, @floatFromInt(rng.next() % 1000)) / 10000.0;
+    }
+};
+
+/// Simple pseudo-random number generator
+pub const PseudoRng = struct {
+    state: u64,
+
+    pub fn init(seed: u64) PseudoRng {
+        return PseudoRng{ .state = seed };
+    }
+
+    pub fn next(self: *PseudoRng) u64 {
+        self.state = self.state *% 1103515245 +% 12345;
+        return self.state;
+    }
+};
 const tlwe = @import("tlwe.zig");
 const key_module = @import("key.zig");
 
@@ -18,7 +48,7 @@ pub fn torusToF64(t: params.Torus) f64 {
 }
 
 /// Convert array of f64 to array of torus
-pub fn f64ToTorusVec(allocator: std.mem.Allocator, d: []const f64) ![]params.Torus {
+pub fn f64ToTorusVec(d: []const f64, allocator: std.mem.Allocator) ![]params.Torus {
     const result = try allocator.alloc(params.Torus, d.len);
     for (d, 0..) |val, i| {
         result[i] = f64ToTorus(val);
@@ -68,14 +98,15 @@ pub fn gaussianTorusVec(
 
 /// Generate array of gaussian noise in f64 representation
 pub fn gaussianF64Vec(
-    allocator: std.mem.Allocator,
     mu: []const f64,
-    normal_distr: ?*const void,
-    rng: ?*const void,
-) ![]params.Torus {
-    const result = try allocator.alloc(params.Torus, mu.len);
+    normal_distr: *NormalDistribution,
+    rng: *PseudoRng,
+    allocator: std.mem.Allocator,
+) ![]f64 {
+    const result = try allocator.alloc(f64, mu.len);
     for (mu, 0..) |val, i| {
-        result[i] = gaussianF64(val, normal_distr, rng);
+        const noise = normal_distr.sample(rng);
+        result[i] = val + noise;
     }
     return result;
 }
@@ -130,7 +161,9 @@ test "gaussian sampling" {
     // Simplified test since we're using pseudo-random for now
     const allocator = std.testing.allocator;
     const mu = [_]f64{ 12.0, 11.0 };
-    const torus_vec = try gaussianF64Vec(allocator, &mu, null, null);
+    var normal_distr = NormalDistribution.init(0.0, 0.01);
+    var rng = PseudoRng.init(42);
+    const torus_vec = try gaussianF64Vec(&mu, &normal_distr, &rng, allocator);
     defer allocator.free(torus_vec);
 
     try std.testing.expect(torus_vec.len == 2);

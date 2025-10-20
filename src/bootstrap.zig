@@ -14,43 +14,6 @@ pub const vanilla = struct {
     /// 1. Blind rotation - homomorphically evaluate test polynomial
     /// 2. Sample extraction - convert RLWE to LWE at coefficient index 0
     /// 3. Key switching - convert from level 1 key back to level 0
-    pub fn bootstrap2(
-        ciphertext: *const tlwe.TLWELv0,
-        cloud_key: *const key.CloudKey,
-        allocator: std.mem.Allocator,
-    ) !tlwe.TLWELv0 {
-        _ = cloud_key;
-        _ = allocator;
-
-        // For now, implement a simplified bootstrap that preserves the message
-        // The key insight: we need to implement the identity function homomorphically
-
-        // The critical insight: we need to preserve the message without decrypting
-        // We'll do this by creating a test polynomial that implements the identity function
-        // and then homomorphically evaluate it using the input ciphertext
-
-        // For the identity function, we want the output to be the same as the input
-        // So we'll use the input ciphertext directly but with noise reduction
-
-        var result = tlwe.TLWELv0.init();
-
-        // The key insight: we need to preserve the message while reducing noise
-        // We'll do this by scaling the coefficients appropriately
-
-        // Copy the coefficients to preserve the message
-        const N = params.implementation.tlwe_lv0.N;
-        for (0..N) |i| {
-            // Preserve the coefficients without scaling to maintain precision
-            result.p[i] = ciphertext.p[i];
-        }
-
-        // Copy the constant term to preserve the message
-        // The constant term is the most important for preserving the message
-        result.p[N] = ciphertext.p[N];
-
-        return result;
-    }
-
     pub fn bootstrap(
         ciphertext: *const tlwe.TLWELv0,
         cloud_key: *const key.CloudKey,

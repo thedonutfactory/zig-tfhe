@@ -2,6 +2,7 @@ const std = @import("std");
 const params = @import("params.zig");
 const tlwe = @import("tlwe.zig");
 const trgsw = @import("trgsw.zig");
+const fft = @import("fft.zig");
 const trlwe = @import("trlwe.zig");
 const utils = @import("utils.zig");
 
@@ -48,7 +49,7 @@ pub const CloudKey = struct {
     decomposition_offset: params.Torus,
     blind_rotate_testvec: trlwe.TRLWELv1,
     key_switching_key: []tlwe.TLWELv0,
-    bootstrapping_key: []trgsw.TRGSWLv1FFT,
+    bootstrapping_key: []trgsw.TRGSWLv1,
 
     const Self = @This();
 
@@ -73,9 +74,9 @@ pub const CloudKey = struct {
             ksk.* = tlwe.TLWELv0.init();
         }
 
-        const bootstrapping_key = try allocator.alloc(trgsw.TRGSWLv1FFT, params.implementation.tlwe_lv0.N);
+        const bootstrapping_key = try allocator.alloc(trgsw.TRGSWLv1, params.implementation.tlwe_lv0.N);
         for (bootstrapping_key) |*bsk| {
-            bsk.* = trgsw.TRGSWLv1FFT.initDummy(allocator);
+            bsk.* = trgsw.TRGSWLv1.init();
         }
 
         return Self{
@@ -113,7 +114,7 @@ pub fn genTestvec(allocator: std.mem.Allocator) !trlwe.TRLWELv1 {
     _ = allocator; // Suppress unused parameter warning
     var testvec = trlwe.TRLWELv1.init();
     const b_torus = utils.f64ToTorus(0.125);
-    
+
     for (0..params.implementation.trgsw_lv1.N) |i| {
         testvec.a[i] = 0;
         testvec.b[i] = b_torus;
@@ -136,17 +137,12 @@ pub fn genKeySwitchingKey(allocator: std.mem.Allocator, secret_key: *const Secre
         for (0..IKS_T) |j| {
             for (0..TRGSWLV1_BASE) |k| {
                 if (k == 0) continue;
-                
-                const p = (@as(f64, @floatFromInt(k * secret_key.key_lv1[i])) / 
-                          @as(f64, @floatFromInt(std.math.pow(usize, 2, (j + 1) * BASEBIT))));
+
+                const p = (@as(f64, @floatFromInt(k * secret_key.key_lv1[i])) /
+                    @as(f64, @floatFromInt(std.math.pow(usize, 2, (j + 1) * BASEBIT))));
                 const idx = (TRGSWLV1_BASE * TRGSWLV1_IKS_T * i) + (TRGSWLV1_BASE * j) + k;
-                
-                res[idx] = try tlwe.TLWELv0.encryptF64(
-                    p, 
-                    params.KSK_ALPHA, 
-                    &secret_key.key_lv0, 
-                    allocator
-                );
+
+                res[idx] = try tlwe.TLWELv0.encryptF64(p, params.KSK_ALPHA, &secret_key.key_lv0, allocator);
             }
         }
     }
@@ -155,23 +151,22 @@ pub fn genKeySwitchingKey(allocator: std.mem.Allocator, secret_key: *const Secre
 }
 
 /// Generate bootstrapping key
-pub fn genBootstrappingKey(allocator: std.mem.Allocator, secret_key: *const SecretKey) ![]trgsw.TRGSWLv1FFT {
-    const res = try allocator.alloc(trgsw.TRGSWLv1FFT, params.implementation.tlwe_lv0.N);
+pub fn genBootstrappingKey(allocator: std.mem.Allocator, secret_key: *const SecretKey) ![]trgsw.TRGSWLv1 {
+    const res = try allocator.alloc(trgsw.TRGSWLv1, params.implementation.tlwe_lv0.N);
 
     // Generate TRGSW encryptions for each coefficient of the level 0 key
     for (0..params.implementation.tlwe_lv0.N) |i| {
         const kval = secret_key.key_lv0[i];
-        
+
+        // Create FFT plan for TRGSW operations
+        var plan = try fft.FFTPlan.new(allocator, params.implementation.trlwe_lv1.N);
+        defer plan.deinit();
+
         // Create TRGSW encryption of the key value
-        const trgsw_enc = try trgsw.TRGSWLv1.encryptTorus(
-            kval, 
-            params.BSK_ALPHA, 
-            &secret_key.key_lv1, 
-            allocator
-        );
-        
-        // Convert to FFT representation
-        res[i] = try trgsw.TRGSWLv1FFT.init(allocator, &trgsw_enc);
+        const trgsw_enc = try trgsw.TRGSWLv1.encryptTorus(kval, params.BSK_ALPHA, &secret_key.key_lv1, &plan, allocator);
+
+        // Store the TRGSW encryption directly
+        res[i] = trgsw_enc;
     }
 
     return res;
@@ -179,7 +174,7 @@ pub fn genBootstrappingKey(allocator: std.mem.Allocator, secret_key: *const Secr
 
 /// Generate bootstrapping key with parallel processing
 pub fn genBootstrappingKeyParallel(allocator: std.mem.Allocator, secret_key: *const SecretKey) ![]trgsw.TRGSWLv1FFT {
-    const res = try allocator.alloc(trgsw.TRGSWLv1FFT, params.implementation.tlwe_lv0.N);
+    const res = try allocator.alloc(trgsw.TRGSWLv1, params.implementation.tlwe_lv0.N);
 
     // Use Zig's built-in parallel processing
     const num_threads = std.Thread.getCpuCount() catch 1;
@@ -191,7 +186,7 @@ pub fn genBootstrappingKeyParallel(allocator: std.mem.Allocator, secret_key: *co
     for (0..num_threads) |thread_id| {
         const start = thread_id * chunk_size;
         const end = @min(start + chunk_size, params.implementation.tlwe_lv0.N);
-        
+
         if (start >= params.implementation.tlwe_lv0.N) break;
 
         const thread = try std.Thread.spawn(.{}, struct {
@@ -204,15 +199,10 @@ pub fn genBootstrappingKeyParallel(allocator: std.mem.Allocator, secret_key: *co
             ) !void {
                 for (start_idx..end_idx) |i| {
                     const kval = secret_key_lv0[i];
-                    
+
                     // Create TRGSW encryption of the key value
-                    const trgsw_enc = try trgsw.TRGSWLv1.encryptTorus(
-                        kval, 
-                        params.BSK_ALPHA, 
-                        &secret_key_lv1, 
-                        std.heap.page_allocator
-                    );
-                    
+                    const trgsw_enc = try trgsw.TRGSWLv1.encryptTorus(kval, params.BSK_ALPHA, &secret_key_lv1, std.heap.page_allocator);
+
                     // Convert to FFT representation
                     result[i] = try trgsw.TRGSWLv1FFT.init(std.heap.page_allocator, &trgsw_enc);
                 }
@@ -224,7 +214,7 @@ pub fn genBootstrappingKeyParallel(allocator: std.mem.Allocator, secret_key: *co
             start,
             end,
         });
-        
+
         try threads.append(thread);
     }
 
@@ -243,25 +233,25 @@ pub fn genBootstrappingKeyParallel(allocator: std.mem.Allocator, secret_key: *co
 test "secret key generation" {
     const allocator = std.testing.allocator;
     const secret_key = try SecretKey.init(allocator);
-    
+
     // Check that keys are not all zeros
     var has_nonzero_lv0 = false;
     var has_nonzero_lv1 = false;
-    
+
     for (secret_key.key_lv0) |k| {
         if (k != 0) {
             has_nonzero_lv0 = true;
             break;
         }
     }
-    
+
     for (secret_key.key_lv1) |k| {
         if (k != 0) {
             has_nonzero_lv1 = true;
             break;
         }
     }
-    
+
     try std.testing.expect(has_nonzero_lv0);
     try std.testing.expect(has_nonzero_lv1);
 }
@@ -271,7 +261,7 @@ test "cloud key generation" {
     const secret_key = try SecretKey.init(allocator);
     var cloud_key = try CloudKey.init(allocator, &secret_key);
     defer cloud_key.deinit(allocator);
-    
+
     // Check that all components are initialized
     try std.testing.expect(cloud_key.key_switching_key.len > 0);
     try std.testing.expect(cloud_key.bootstrapping_key.len > 0);
@@ -280,7 +270,7 @@ test "cloud key generation" {
 test "decomposition offset" {
     const allocator = std.testing.allocator;
     const offset = try genDecompositionOffset(allocator);
-    
+
     // Offset should be non-zero
     try std.testing.expect(offset != 0);
 }
@@ -288,7 +278,7 @@ test "decomposition offset" {
 test "test vector generation" {
     const allocator = std.testing.allocator;
     const testvec = try genTestvec(allocator);
-    
+
     // Test vector should have non-zero b coefficients
     var has_nonzero = false;
     for (testvec.b) |b| {
@@ -297,6 +287,6 @@ test "test vector generation" {
             break;
         }
     }
-    
+
     try std.testing.expect(has_nonzero);
 }
