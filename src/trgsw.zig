@@ -38,6 +38,7 @@ pub const TRGSWLv1 = struct {
         defer allocator.free(p_f64);
 
         for (0..L) |i| {
+            // Match Rust: (params::trgsw_lv1::BG as f64).powf(-((1 + i) as f64))
             p_f64[i] = std.math.pow(f64, @as(f64, @floatFromInt(BG)), -@as(f64, @floatFromInt(1 + i)));
         }
 
@@ -59,6 +60,7 @@ pub const TRGSWLv1 = struct {
         }
 
         // Add the message to the appropriate positions
+        // Match Rust: trgsw.trlwe[i].a[0] = trgsw.trlwe[i].a[0].wrapping_add(p * p_torus);
         for (0..L) |i| {
             trgsw.trlwe_array[i].a[0] = trgsw.trlwe_array[i].a[0] +% (p *% p_torus[i]);
             trgsw.trlwe_array[i + L].b[0] = trgsw.trlwe_array[i + L].b[0] +% (p *% p_torus[i]);
@@ -200,7 +202,7 @@ pub fn decomposition(
 ///
 /// Performs complex multiply-accumulate: res += a * b
 /// with proper scaling for negacyclic FFT
-fn fmaInFd1024(
+pub fn fmaInFd1024(
     res: []f64,
     a: []const f64,
     b: []const f64,

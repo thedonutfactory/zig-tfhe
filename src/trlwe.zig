@@ -34,10 +34,9 @@ pub const TRLWELv1 = struct {
     ) !Self {
         var trlwe = Self.init();
 
-        // Generate random coefficients a[i]
+        // Generate random coefficients a[i] - match Rust: trlwe.a.iter_mut().for_each(|e| *e = rng.gen());
         for (0..params.implementation.trlwe_lv1.N) |i| {
-            const seed = @as(u64, @intCast(i)) *% 1103515245 +% 12345;
-            trlwe.a[i] = @intCast(seed % std.math.pow(u64, 2, params.TORUS_SIZE));
+            trlwe.a[i] = std.crypto.random.int(params.Torus);
         }
 
         // Generate noise for b coefficients

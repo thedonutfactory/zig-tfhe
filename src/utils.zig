@@ -76,6 +76,7 @@ pub fn gaussianTorusVec(
 }
 
 /// Generate array of gaussian noise in f64 representation
+/// Match Rust: gaussian_torus(f64_to_torus(e), normal_distr, rng)
 pub fn gaussianF64Vec(
     mu: []const f64,
     normal_distr: *const NormalDistribution,
@@ -83,8 +84,10 @@ pub fn gaussianF64Vec(
 ) ![]f64 {
     const result = try allocator.alloc(f64, mu.len);
     for (mu, 0..) |val, i| {
-        const noise = normal_distr.sample();
-        result[i] = val + noise;
+        // Match Rust: convert to torus, add gaussian noise in torus space, convert back
+        const mu_torus = f64ToTorus(val);
+        const noise_torus = gaussianTorus(mu_torus, normal_distr);
+        result[i] = torusToF64(noise_torus);
     }
     return result;
 }
