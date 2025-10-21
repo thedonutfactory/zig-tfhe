@@ -7,6 +7,21 @@
 const std = @import("std");
 const params = @import("params.zig");
 
+/// Global atomic counter for generating unique seeds
+var global_seed_counter = std.atomic.Value(u64).init(0);
+
+/// Generate a unique random seed for RNG initialization
+/// Uses atomic counter, timestamp, and stack address for maximum uniqueness
+pub fn getUniqueSeed() u64 {
+    const counter = global_seed_counter.fetchAdd(1, .monotonic);
+    const timestamp = @as(u64, @intCast(std.time.nanoTimestamp()));
+    // Mix in the address of a stack variable for additional entropy
+    var stack_var: u8 = 0;
+    const addr = @intFromPtr(&stack_var);
+    // Combine all three sources with XOR and bit rotation
+    return (counter ^ timestamp) +% addr;
+}
+
 // Import TLWE module for Ciphertext type
 const tlwe = @import("tlwe.zig");
 
@@ -20,7 +35,7 @@ pub const Ciphertext = tlwe.TLWELv0;
 /// Convert a floating-point number to torus representation
 pub fn f64ToTorus(d: f64) params.Torus {
     const torus = (@mod(d, 1.0)) * @as(f64, @floatFromInt(std.math.pow(u64, 2, params.TORUS_SIZE)));
-    return @as(params.Torus, @intFromFloat(@as(f64, @floatFromInt(@as(params.IntTorus, @intFromFloat(torus))))));
+    return @as(params.Torus, @intFromFloat(torus));
 }
 
 /// Convert a torus value to floating-point representation

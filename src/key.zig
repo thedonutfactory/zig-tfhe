@@ -43,7 +43,7 @@ pub const SecretKey = struct {
 
     /// Create a new secret key with random values
     pub fn new() SecretKey {
-        var rng = std.Random.DefaultPrng.init(@intCast(std.time.timestamp()));
+        var rng = std.Random.DefaultPrng.init(utils.getUniqueSeed());
         var key = SecretKey{
             .key_lv0 = [_]params.Torus{0} ** params.implementation.tlwe_lv0.N,
             .key_lv1 = [_]params.Torus{0} ** params.implementation.tlwe_lv1.N,
@@ -196,21 +196,28 @@ pub fn genBootstrappingKeyWithRailgun(
     secret_key: *const SecretKey,
     railgun: ?void, // Will be properly typed when parallel module is available
 ) !BootstrappingKey {
-    // Suppress unused parameter warnings - these will be used when parallel module is available
-    _ = secret_key;
-    _ = railgun;
+    _ = railgun; // Will be used when parallel module is available
 
     var bootstrapping_key = BootstrappingKey{};
     try bootstrapping_key.resize(allocator, params.implementation.tlwe_lv0.N);
 
-    // Sequential implementation for now
+    // Get or create thread-local FFT plan
+    var temp_plan = try fft.FFTPlan.new(allocator, params.implementation.trgsw_lv1.N);
+    defer temp_plan.deinit();
+
+    // Sequential implementation: encrypt each key value
     for (0..params.implementation.tlwe_lv0.N) |i| {
-        // Placeholder implementation - will be properly implemented when TRGSW module is available
-        // Create a dummy TRGSW for bootstrapping key
-        const dummy_trgsw = trgsw.TRGSWLv1.new();
-        var temp_plan = try fft.FFTPlan.new(allocator, params.implementation.trgsw_lv1.N);
-        defer temp_plan.deinit();
-        bootstrapping_key.items[i] = try TRGSWLv1FFT.new(&dummy_trgsw, &temp_plan);
+        // Encrypt the i-th secret key value into a TRGSW ciphertext
+        const kval = secret_key.key_lv0[i];
+        const trgsw_encrypted = try trgsw.TRGSWLv1.encryptTorus(
+            kval,
+            params.BSK_ALPHA,
+            &secret_key.key_lv1,
+            &temp_plan,
+        );
+
+        // Convert to FFT representation for efficient operations
+        bootstrapping_key.items[i] = try TRGSWLv1FFT.new(&trgsw_encrypted, &temp_plan);
     }
 
     return bootstrapping_key;

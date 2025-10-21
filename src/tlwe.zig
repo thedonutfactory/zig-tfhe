@@ -36,7 +36,7 @@ pub const TLWELv0 = struct {
 
     /// Encrypt a floating-point value
     pub fn encryptF64(p: f64, alpha: f64, key: []const params.Torus) !TLWELv0 {
-        var rng = std.Random.DefaultPrng.init(@intCast(std.time.timestamp()));
+        var rng = std.Random.DefaultPrng.init(utils.getUniqueSeed());
         var tlwe = TLWELv0.new();
         var inner_product: params.Torus = 0;
 
@@ -206,7 +206,7 @@ pub const TLWELv1 = struct {
 
     /// Encrypt a floating-point value (for testing)
     pub fn encryptF64(p: f64, alpha: f64, key: []const params.Torus) !TLWELv1 {
-        var rng = std.Random.DefaultPrng.init(@intCast(std.time.timestamp()));
+        var rng = std.Random.DefaultPrng.init(utils.getUniqueSeed());
         var tlwe = TLWELv1.new();
         var inner_product: params.Torus = 0;
 

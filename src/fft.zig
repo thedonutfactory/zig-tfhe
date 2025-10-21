@@ -202,13 +202,16 @@ pub const KlemsaProcessor = struct {
             const tmp_re = (f_re * w_re + f_im * w_im) * normalization;
             const tmp_im = (f_im * w_re - f_re * w_im) * normalization;
 
-            // Convert to integer using proper rounding and bounds checking
+            // Convert to integer using proper rounding
+            // Match Rust's "as i64 as u32" conversion which uses two's complement wrapping
             const rounded_re = @as(i64, @intFromFloat(@round(tmp_re)));
             const rounded_im = @as(i64, @intFromFloat(@round(tmp_im)));
 
-            // Convert to torus using proper modular arithmetic to handle overflow
-            result[i] = @as(params.Torus, @intCast(@mod(rounded_re, std.math.pow(i64, 2, 32))));
-            result[i + n2] = @as(params.Torus, @intCast(@mod(rounded_im, std.math.pow(i64, 2, 32))));
+            // Convert using bitcast to match Rust's wrapping behavior
+            // Rust: tmp_re.round() as i64 as params::Torus
+            // This truncates and wraps around using two's complement
+            result[i] = @as(params.Torus, @bitCast(@as(i32, @truncate(rounded_re))));
+            result[i + n2] = @as(params.Torus, @bitCast(@as(i32, @truncate(rounded_im))));
         }
 
         return result;

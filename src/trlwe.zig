@@ -37,7 +37,7 @@ pub const TRLWELv1 = struct {
         secret_key: []const params.Torus,
         plan: *fft.FFTPlan,
     ) !TRLWELv1 {
-        var rng = std.Random.DefaultPrng.init(@intCast(std.time.timestamp()));
+        var rng = std.Random.DefaultPrng.init(utils.getUniqueSeed());
         var trlwe = TRLWELv1.new();
 
         // Fill a with random values
@@ -158,7 +158,9 @@ pub fn sampleExtractIndex(trlwe: *const TRLWELv1, k: usize) tlwe.TLWELv1 {
         if (i <= k) {
             res.p[i] = trlwe.a[k - i];
         } else {
-            res.p[i] = std.math.maxInt(params.Torus) - trlwe.a[N + k - i];
+            //res.p[i] = std.math.maxInt(params.Torus) - trlwe.a[N + k - i];
+            res.p[i] = 0 -% trlwe.a[N + k - i]; // Negation in torus
+
         }
     }
     res.bMut().* = trlwe.b[k];
@@ -175,7 +177,8 @@ pub fn sampleExtractIndex2(trlwe: *const TRLWELv1, k: usize) tlwe.TLWELv0 {
         if (i <= k) {
             res.p[i] = trlwe.a[k - i];
         } else {
-            res.p[i] = std.math.maxInt(params.Torus) - trlwe.a[N + k - i];
+            //res.p[i] = std.math.maxInt(params.Torus) - trlwe.a[N + k - i];
+            res.p[i] = 0 -% trlwe.a[N + k - i]; // Negation in torus
         }
     }
     res.bMut().* = trlwe.b[k];
