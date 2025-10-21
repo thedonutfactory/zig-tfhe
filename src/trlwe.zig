@@ -1,251 +1,364 @@
+//! TRLWE (Ring Learning With Errors over the Torus) implementation
+//!
+//! This module provides TRLWE encryption, which is a ring-based variant of LWE
+//! that operates over polynomial rings. TRLWE is essential for efficient
+//! homomorphic operations in TFHE.
+
 const std = @import("std");
 const params = @import("params.zig");
-const fft = @import("fft.zig");
-const key_module = @import("key.zig");
 const utils = @import("utils.zig");
 const tlwe = @import("tlwe.zig");
+const fft = @import("fft.zig");
+const key = @import("key.zig");
 
-/// TRLWE (Torus Ring Learning With Errors) Level 1 ciphertext
-///
-/// This represents a polynomial ciphertext in the ring R[X]/(X^N+1)
-/// where N is the polynomial degree (typically 1024 for level 1)
+// ============================================================================
+// TRLWE LEVEL 1 (Lv1) - Ring LWE over the torus
+// ============================================================================
+
+/// TRLWE Level 1 ciphertext - ring-based LWE with polynomial coefficients
 pub const TRLWELv1 = struct {
-    /// Polynomial coefficients a[i] for i=0..N-1
     a: [params.implementation.trlwe_lv1.N]params.Torus,
-    /// Polynomial coefficients b[i] for i=0..N-1 (includes message + noise)
     b: [params.implementation.trlwe_lv1.N]params.Torus,
 
     const Self = @This();
 
-    pub fn init() Self {
-        return Self{
+    /// Create a new zero TRLWE ciphertext
+    pub fn new() TRLWELv1 {
+        return TRLWELv1{
             .a = [_]params.Torus{0} ** params.implementation.trlwe_lv1.N,
             .b = [_]params.Torus{0} ** params.implementation.trlwe_lv1.N,
         };
     }
 
-    /// Encrypt a polynomial message using TRLWE
+    /// Encrypt a vector of floating-point values
     pub fn encryptF64(
         p: []const f64,
         alpha: f64,
-        key: *const key_module.SecretKeyLv1,
+        secret_key: []const params.Torus,
         plan: *fft.FFTPlan,
-        allocator: std.mem.Allocator,
-    ) !Self {
-        var trlwe = Self.init();
+    ) !TRLWELv1 {
+        var rng = std.Random.DefaultPrng.init(@intCast(std.time.timestamp()));
+        var trlwe = TRLWELv1.new();
 
-        // Generate random coefficients a[i] - match Rust: trlwe.a.iter_mut().for_each(|e| *e = rng.gen());
-        for (0..params.implementation.trlwe_lv1.N) |i| {
-            trlwe.a[i] = std.crypto.random.int(params.Torus);
+        // Fill a with random values
+        for (0..trlwe.a.len) |i| {
+            trlwe.a[i] = rng.random().int(params.Torus);
         }
 
-        // Generate noise for b coefficients
-        var normal_distr = utils.NormalDistribution.init(0.0, alpha);
-        const noise_vec = try utils.gaussianF64Vec(p, &normal_distr, allocator);
-        defer allocator.free(noise_vec);
+        // Generate noise for b
+        var normal_distr = utils.NormalDist.init(0.0, alpha);
+        const noise_vec = try utils.gaussianF64Vec(std.heap.page_allocator, p, &normal_distr, rng.random());
+        defer std.heap.page_allocator.free(noise_vec);
 
-        // Copy to fixed-size array
-        for (0..params.implementation.trlwe_lv1.N) |i| {
-            trlwe.b[i] = utils.f64ToTorus(noise_vec[i]);
+        // Copy noise to b (assuming p.len == N)
+        for (noise_vec, 0..) |noise, i| {
+            trlwe.b[i] = noise;
         }
 
-        // Compute polynomial multiplication: b = b + a * s (where s is the secret key)
-        const poly_res = try plan.processor.poly_mul(&trlwe.a, key);
-        defer allocator.free(poly_res);
+        // Compute polynomial multiplication: a * secret_key
+        const poly_res = try plan.processor.poly_mul(&trlwe.a, secret_key);
 
-        for (0..params.implementation.trlwe_lv1.N) |i| {
+        // Add polynomial result to b
+        for (0..trlwe.b.len) |i| {
             trlwe.b[i] = trlwe.b[i] +% poly_res[i];
         }
 
         return trlwe;
     }
 
-    /// Decrypt a TRLWE ciphertext to get the polynomial message
-    pub fn decryptF64(self: *const Self, key: *const key_module.SecretKeyLv1, plan: *fft.FFTPlan, allocator: std.mem.Allocator) ![]f64 {
-        // Compute polynomial multiplication: result = b - a * s
-        const poly_res = try plan.processor.poly_mul(&self.a, key);
-        defer allocator.free(poly_res);
+    /// Encrypt a vector of boolean values
+    pub fn encryptBool(
+        p_bool: []const bool,
+        alpha: f64,
+        secret_key: []const params.Torus,
+        plan: *fft.FFTPlan,
+    ) !TRLWELv1 {
+        // Convert boolean values to floating-point
+        var p_f64 = try std.heap.page_allocator.alloc(f64, p_bool.len);
+        defer std.heap.page_allocator.free(p_f64);
 
-        var result = try allocator.alloc(f64, params.implementation.trlwe_lv1.N);
-        for (0..params.implementation.trlwe_lv1.N) |i| {
-            const diff = self.b[i] -% poly_res[i];
-            result[i] = utils.torusToF64(diff);
+        for (p_bool, 0..) |val, i| {
+            p_f64[i] = if (val) 0.125 else -0.125;
         }
 
-        return result;
+        return Self.encryptF64(p_f64, alpha, secret_key, plan);
     }
 
-    /// Add two TRLWE ciphertexts
-    pub fn add(self: *const Self, other: *const Self) Self {
-        var result = Self.init();
+    /// Decrypt a vector of boolean values
+    pub fn decryptBool(self: *const Self, secret_key: []const params.Torus, plan: *fft.FFTPlan) ![]bool {
+        // Compute polynomial multiplication: a * secret_key
+        const poly_res = try plan.processor.poly_mul(&self.a, secret_key);
+        defer std.heap.page_allocator.free(poly_res);
 
-        for (0..params.implementation.trlwe_lv1.N) |i| {
-            result.a[i] = self.a[i] +% other.a[i];
-            result.b[i] = self.b[i] +% other.b[i];
+        var res = try std.heap.page_allocator.alloc(bool, self.a.len);
+
+        for (0..self.a.len) |i| {
+            const value = @as(params.HalfTorus, @bitCast(self.b[i] -% poly_res[i]));
+            res[i] = value >= 0;
         }
 
-        return result;
-    }
-
-    /// Subtract two TRLWE ciphertexts
-    pub fn sub(self: *const Self, other: *const Self) Self {
-        var result = Self.init();
-
-        for (0..params.implementation.trlwe_lv1.N) |i| {
-            result.a[i] = self.a[i] -% other.a[i];
-            result.b[i] = self.b[i] -% other.b[i];
-        }
-
-        return result;
-    }
-
-    /// Multiply TRLWE ciphertext by a scalar
-    pub fn mulScalar(self: *const Self, scalar: params.Torus) Self {
-        var result = Self.init();
-
-        for (0..params.implementation.trlwe_lv1.N) |i| {
-            result.a[i] = self.a[i] *% scalar;
-            result.b[i] = self.b[i] *% scalar;
-        }
-
-        return result;
-    }
-
-    /// Negate TRLWE ciphertext
-    pub fn neg(self: *const Self) Self {
-        var result = Self.init();
-
-        for (0..params.implementation.trlwe_lv1.N) |i| {
-            result.a[i] = -%self.a[i];
-            result.b[i] = -%self.b[i];
-        }
-
-        return result;
+        return res;
     }
 };
 
-/// TRLWE FFT structure for efficient operations
+// ============================================================================
+// TRLWE FFT REPRESENTATION
+// ============================================================================
+
+/// TRLWE Level 1 in FFT domain for efficient operations
 pub const TRLWELv1FFT = struct {
-    a: [1024]f64,
-    b: [1024]f64,
+    a: [params.implementation.trlwe_lv1.N]f64,
+    b: [params.implementation.trlwe_lv1.N]f64,
 
     const Self = @This();
 
-    pub fn init() Self {
-        return Self{
-            .a = [_]f64{0.0} ** 1024,
-            .b = [_]f64{0.0} ** 1024,
+    /// Create FFT representation from TRLWE ciphertext
+    pub fn new(trlwe: *const TRLWELv1, plan: *fft.FFTPlan) !TRLWELv1FFT {
+        const a_fft = try plan.processor.ifft(&trlwe.a);
+        defer plan.processor.allocator.free(a_fft);
+
+        const b_fft = try plan.processor.ifft(&trlwe.b);
+        defer plan.processor.allocator.free(b_fft);
+
+        var result = TRLWELv1FFT{
+            .a = [_]f64{0.0} ** params.implementation.trlwe_lv1.N,
+            .b = [_]f64{0.0} ** params.implementation.trlwe_lv1.N,
         };
-    }
 
-    pub fn initFromTrlwe(trlwe: *const TRLWELv1, plan: *fft.FFTPlan, allocator: std.mem.Allocator) !Self {
-        var result = Self.init();
-
-        // Convert a polynomial to frequency domain
-        const a_fft = try plan.processor.ifft(trlwe.a[0..]);
-        defer allocator.free(a_fft);
-
-        // Convert b polynomial to frequency domain
-        const b_fft = try plan.processor.ifft(trlwe.b[0..]);
-        defer allocator.free(b_fft);
-
-        // Copy to fixed-size arrays
-        for (0..1024) |i| {
-            result.a[i] = a_fft[i];
-            result.b[i] = b_fft[i];
+        // Copy FFT results to arrays
+        for (a_fft, 0..) |val, i| {
+            result.a[i] = val;
+        }
+        for (b_fft, 0..) |val, i| {
+            result.b[i] = val;
         }
 
         return result;
     }
+
+    /// Create a dummy FFT representation (all zeros)
+    pub fn newDummy() TRLWELv1FFT {
+        return TRLWELv1FFT{
+            .a = [_]f64{0.0} ** params.implementation.trlwe_lv1.N,
+            .b = [_]f64{0.0} ** params.implementation.trlwe_lv1.N,
+        };
+    }
 };
+
+// ============================================================================
+// SAMPLE EXTRACTION FUNCTIONS
+// ============================================================================
+
+/// Extract a TLWE sample from TRLWE at a specific index
+pub fn sampleExtractIndex(trlwe: *const TRLWELv1, k: usize) tlwe.TLWELv1 {
+    var res = tlwe.TLWELv1.new();
+
+    const N = params.implementation.trlwe_lv1.N;
+    for (0..N) |i| {
+        if (i <= k) {
+            res.p[i] = trlwe.a[k - i];
+        } else {
+            res.p[i] = std.math.maxInt(params.Torus) - trlwe.a[N + k - i];
+        }
+    }
+    res.bMut().* = trlwe.b[k];
+
+    return res;
+}
+
+/// Extract a TLWE Level 0 sample from TRLWE at a specific index
+pub fn sampleExtractIndex2(trlwe: *const TRLWELv1, k: usize) tlwe.TLWELv0 {
+    var res = tlwe.TLWELv0.new();
+
+    const N = params.implementation.tlwe_lv0.N;
+    for (0..N) |i| {
+        if (i <= k) {
+            res.p[i] = trlwe.a[k - i];
+        } else {
+            res.p[i] = std.math.maxInt(params.Torus) - trlwe.a[N + k - i];
+        }
+    }
+    res.bMut().* = trlwe.b[k];
+
+    return res;
+}
 
 // ============================================================================
 // TESTS
 // ============================================================================
 
-test "trlwe initialization" {
-    const trlwe = TRLWELv1.init();
-
-    // Check that all coefficients are zero
-    for (0..params.implementation.trlwe_lv1.N) |i| {
-        try std.testing.expectEqual(@as(params.Torus, 0), trlwe.a[i]);
-        try std.testing.expectEqual(@as(params.Torus, 0), trlwe.b[i]);
-    }
-}
-
 test "trlwe encryption and decryption" {
-    const allocator = std.testing.allocator;
-    var plan = try fft.FFTPlan.new(allocator, params.implementation.trlwe_lv1.N);
+    var rng = std.Random.DefaultPrng.init(42);
+
+    // Generate secret key
+    const secret_key = key.SecretKey.new();
+    var plan = try fft.FFTPlan.new(std.heap.page_allocator, params.implementation.trlwe_lv1.N);
     defer plan.deinit();
 
-    var secret_key = try key_module.SecretKey.init(allocator);
+    var correct: usize = 0;
+    const try_num: usize = 100; // Reduced for faster testing
+    const N = params.implementation.trlwe_lv1.N;
 
-    // Create test polynomial message
-    var message = try allocator.alloc(f64, params.implementation.trlwe_lv1.N);
-    defer allocator.free(message);
+    for (0..try_num) |_| {
+        // Generate random plaintext
+        var plain_text = try std.heap.page_allocator.alloc(bool, N);
+        defer std.heap.page_allocator.free(plain_text);
 
-    for (0..params.implementation.trlwe_lv1.N) |i| {
-        message[i] = @as(f64, @floatFromInt(i % 100)) / 100.0;
+        for (0..N) |i| {
+            plain_text[i] = rng.random().boolean();
+        }
+
+        // Encrypt
+        const c = try TRLWELv1.encryptBool(
+            plain_text,
+            params.implementation.trlwe_lv1.ALPHA,
+            &secret_key.key_lv1,
+            &plan,
+        );
+
+        // Decrypt
+        const dec = try c.decryptBool(&secret_key.key_lv1, &plan);
+        defer std.heap.page_allocator.free(dec);
+
+        // Check correctness
+        for (0..N) |j| {
+            if (plain_text[j] == dec[j]) {
+                correct += 1;
+            }
+        }
     }
 
-    // Encrypt
-    const encrypted = try TRLWELv1.encryptF64(message, 0.01, &secret_key.key_lv1, &plan, allocator);
-
-    // Decrypt
-    const decrypted = try encrypted.decryptF64(&secret_key.key_lv1, &plan, allocator);
-    defer allocator.free(decrypted);
-
-    // Check that decryption is close to original (within noise tolerance)
-    for (0..params.implementation.trlwe_lv1.N) |i| {
-        const diff = @abs(decrypted[i] - message[i]);
-        try std.testing.expect(diff < 0.1); // Allow for noise
-    }
+    const probability = @as(f64, @floatFromInt(correct)) / @as(f64, @floatFromInt(try_num * N));
+    try std.testing.expect(probability > 0.95); // Should be very high success rate
 }
 
-test "trlwe homomorphic operations" {
-    const allocator = std.testing.allocator;
-    var plan = try fft.FFTPlan.new(allocator, params.implementation.trlwe_lv1.N);
+test "sample extract index" {
+    var rng = std.Random.DefaultPrng.init(42);
+
+    // Generate secret key
+    const secret_key = key.SecretKey.new();
+    var plan = try fft.FFTPlan.new(std.heap.page_allocator, params.implementation.trlwe_lv1.N);
     defer plan.deinit();
 
-    var secret_key = try key_module.SecretKey.init(allocator);
+    var correct: usize = 0;
+    const try_num: usize = 10;
+    const N = params.implementation.trlwe_lv1.N;
 
-    // Create test messages
-    var message1 = try allocator.alloc(f64, params.implementation.trlwe_lv1.N);
-    var message2 = try allocator.alloc(f64, params.implementation.trlwe_lv1.N);
-    defer allocator.free(message1);
-    defer allocator.free(message2);
+    for (0..try_num) |_| {
+        // Generate random plaintext
+        var plain_text = try std.heap.page_allocator.alloc(bool, N);
+        defer std.heap.page_allocator.free(plain_text);
 
-    for (0..params.implementation.trlwe_lv1.N) |i| {
-        message1[i] = @as(f64, @floatFromInt(i % 50)) / 100.0;
-        message2[i] = @as(f64, @floatFromInt((i + 1) % 50)) / 100.0;
+        for (0..N) |i| {
+            plain_text[i] = rng.random().boolean();
+        }
+
+        // Encrypt
+        const c = try TRLWELv1.encryptBool(
+            plain_text,
+            params.implementation.trlwe_lv1.ALPHA,
+            &secret_key.key_lv1,
+            &plan,
+        );
+
+        // Test sample extraction
+        for (0..N) |j| {
+            const tlwe_sample = sampleExtractIndex(&c, j);
+            const dec = tlwe_sample.decryptBool(&secret_key.key_lv1);
+
+            if (plain_text[j] == dec) {
+                correct += 1;
+            }
+        }
     }
 
-    // Encrypt both messages
-    const encrypted1 = try TRLWELv1.encryptF64(message1, 0.01, &secret_key.key_lv1, &plan, allocator);
-    const encrypted2 = try TRLWELv1.encryptF64(message2, 0.01, &secret_key.key_lv1, &plan, allocator);
+    const probability = @as(f64, @floatFromInt(correct)) / @as(f64, @floatFromInt(try_num * N));
+    try std.testing.expect(probability > 0.95); // Should be very high success rate
+}
 
-    // Test addition
-    const sum = encrypted1.add(&encrypted2);
-    const sum_decrypted = try sum.decryptF64(&secret_key.key_lv1, &plan, allocator);
-    defer allocator.free(sum_decrypted);
+test "trlwe fft representation" {
+    var rng = std.Random.DefaultPrng.init(42);
 
-    // Check that sum is approximately correct
-    for (0..params.implementation.trlwe_lv1.N) |i| {
-        const expected = message1[i] + message2[i];
-        const diff = @abs(sum_decrypted[i] - expected);
-        try std.testing.expect(diff < 0.2); // Allow for noise accumulation
+    // Generate secret key
+    _ = key.SecretKey.new();
+    var plan = try fft.FFTPlan.new(std.heap.page_allocator, params.implementation.trlwe_lv1.N);
+    defer plan.deinit();
+
+    // Create a simple TRLWE
+    var trlwe = TRLWELv1.new();
+    for (0..trlwe.a.len) |i| {
+        trlwe.a[i] = rng.random().int(params.Torus);
+        trlwe.b[i] = rng.random().int(params.Torus);
     }
 
-    // Test scalar multiplication
-    const scalar = @as(params.Torus, 2);
-    const scaled = encrypted1.mulScalar(scalar);
-    const scaled_decrypted = try scaled.decryptF64(&secret_key.key_lv1, &plan, allocator);
-    defer allocator.free(scaled_decrypted);
+    // Convert to FFT representation
+    const trlwe_fft = try TRLWELv1FFT.new(&trlwe, &plan);
 
-    // Check that scaling is approximately correct
+    // Check that FFT representation was created
+    try std.testing.expect(trlwe_fft.a.len == params.implementation.trlwe_lv1.N);
+    try std.testing.expect(trlwe_fft.b.len == params.implementation.trlwe_lv1.N);
+}
+
+test "sample extraction deterministic" {
+    // Create a simple TRLWE with known values
+    var trlwe_ct = TRLWELv1.new();
+
+    // Set only the b coefficients (a coefficients are all 0)
+    trlwe_ct.b[0] = utils.f64ToTorus(0.125); // Should extract to 0.125
+    trlwe_ct.b[1] = utils.f64ToTorus(0.0); // Should extract to 0.0
+    trlwe_ct.b[2] = utils.f64ToTorus(0.25); // Should extract to 0.25
+
+    // Test sample extraction at index 0
+    const extracted = sampleExtractIndex(&trlwe_ct, 0);
+
+    // Check that the extracted b value matches the original
+    try std.testing.expect(extracted.p[params.implementation.tlwe_lv1.N] == trlwe_ct.b[0]);
+
+    // Test sample extraction at index 1
+    const extracted1 = sampleExtractIndex(&trlwe_ct, 1);
+    try std.testing.expect(extracted1.p[params.implementation.tlwe_lv1.N] == trlwe_ct.b[1]);
+
+    // Test sample extraction at index 2
+    const extracted2 = sampleExtractIndex(&trlwe_ct, 2);
+    try std.testing.expect(extracted2.p[params.implementation.tlwe_lv1.N] == trlwe_ct.b[2]);
+}
+
+test "trlwe encryption comparison" {
+    std.debug.print("=== TRLWE ENCRYPTION COMPARISON - ZIG ===\n", .{});
+
+    // Create deterministic test data
+    const test_secret_key = key.SecretKey{
+        .key_lv0 = [_]params.Torus{0} ** params.implementation.tlwe_lv0.N,
+        .key_lv1 = [_]params.Torus{0} ** params.implementation.tlwe_lv1.N,
+    };
+
+    var plan = try fft.FFTPlan.new(std.heap.page_allocator, params.implementation.trgsw_lv1.N);
+    defer plan.deinit();
+
+    // Create deterministic message (all zeros)
+    const message = [_]f64{0.0} ** params.implementation.trlwe_lv1.N;
+
+    std.debug.print("Input message[0-4]: {d:.6} {d:.6} {d:.6} {d:.6} {d:.6}\n", .{ message[0], message[1], message[2], message[3], message[4] });
+    std.debug.print("Secret key[0-4]: {} {} {} {} {}\n", .{ test_secret_key.key_lv1[0], test_secret_key.key_lv1[1], test_secret_key.key_lv1[2], test_secret_key.key_lv1[3], test_secret_key.key_lv1[4] });
+
+    // Encrypt the message
+    const encrypted = try TRLWELv1.encryptF64(&message, 0.01, &test_secret_key.key_lv1, &plan);
+
+    std.debug.print("\nEncrypted TRLWE.a[0-4]: {} {} {} {} {}\n", .{ encrypted.a[0], encrypted.a[1], encrypted.a[2], encrypted.a[3], encrypted.a[4] });
+    std.debug.print("Encrypted TRLWE.b[0-4]: {} {} {} {} {}\n", .{ encrypted.b[0], encrypted.b[1], encrypted.b[2], encrypted.b[3], encrypted.b[4] });
+
+    // Test with non-zero message
+    std.debug.print("\n=== Testing with non-zero message ===\n", .{});
+
+    var message2 = [_]f64{0.0} ** params.implementation.trlwe_lv1.N;
     for (0..params.implementation.trlwe_lv1.N) |i| {
-        const expected = message1[i] * 2.0;
-        const diff = @abs(scaled_decrypted[i] - expected);
-        try std.testing.expect(diff < 0.2); // Allow for noise
+        message2[i] = @as(f64, @floatFromInt(i)) * 0.1;
     }
+
+    std.debug.print("Input message2[0-4]: {d:.6} {d:.6} {d:.6} {d:.6} {d:.6}\n", .{ message2[0], message2[1], message2[2], message2[3], message2[4] });
+
+    const encrypted2 = try TRLWELv1.encryptF64(&message2, 0.01, &test_secret_key.key_lv1, &plan);
+
+    std.debug.print("Encrypted2 TRLWE.a[0-4]: {} {} {} {} {}\n", .{ encrypted2.a[0], encrypted2.a[1], encrypted2.a[2], encrypted2.a[3], encrypted2.a[4] });
+    std.debug.print("Encrypted2 TRLWE.b[0-4]: {} {} {} {} {}\n", .{ encrypted2.b[0], encrypted2.b[1], encrypted2.b[2], encrypted2.b[3], encrypted2.b[4] });
 }

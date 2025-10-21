@@ -1,28 +1,13 @@
 const std = @import("std");
-const tfhe = @import("tfhe");
 
-// Import the modules we need
-const params = tfhe.params;
-const utils = tfhe.utils;
-const key = tfhe.key;
-const gates = tfhe.gates;
-const tlwe = tfhe.tlwe;
+// Import the modules we need directly
+const params = @import("../src/params.zig");
+const utils = @import("../src/utils.zig");
+const key = @import("../src/key.zig");
+const gates = @import("../src/gates.zig");
+const tlwe = @import("../src/tlwe.zig");
 
 /// Full adder implementation using homomorphic gates
-///
-/// This implements a full adder circuit that takes three inputs (a, b, carry_in)
-/// and produces two outputs (sum, carry_out).
-///
-/// Truth table:
-/// a | b | cin | sum | cout
-/// 0 | 0 |  0  |  0  |  0
-/// 0 | 0 |  1  |  1  |  0
-/// 0 | 1 |  0  |  1  |  0
-/// 0 | 1 |  1  |  0  |  1
-/// 1 | 0 |  0  |  1  |  0
-/// 1 | 0 |  1  |  0  |  1
-/// 1 | 1 |  0  |  0  |  1
-/// 1 | 1 |  1  |  1  |  1
 fn fullAdder(
     server_key: *const key.CloudKey,
     ct_a: *const utils.Ciphertext,
@@ -50,9 +35,6 @@ fn fullAdder(
 }
 
 /// Add two encrypted numbers using ripple carry adder
-///
-/// This function implements a ripple carry adder that adds two numbers
-/// represented as arrays of encrypted bits.
 pub fn add(
     server_key: *const key.CloudKey,
     a: []const utils.Ciphertext,
@@ -74,37 +56,6 @@ pub fn add(
     }
 
     return .{ result, carry };
-}
-
-/// Subtract two encrypted numbers (WARNING: may not work correctly as noted in Rust version)
-///
-/// This implements subtraction by adding the two's complement of b to a.
-/// Note: The Rust version mentions this function is off by one.
-pub fn sub(
-    server_key: *const key.CloudKey,
-    a: []const utils.Ciphertext,
-    b: []const utils.Ciphertext,
-    cin: utils.Ciphertext,
-    allocator: std.mem.Allocator,
-) !struct { []utils.Ciphertext, utils.Ciphertext } {
-    if (a.len != b.len) {
-        return error.InvalidInput; // Cannot subtract two numbers with different number of bits!
-    }
-
-    // WARNING: this function does not work as it is off by one (as noted in Rust version)
-
-    const gates_impl = gates.Gates.new();
-    var not_b = try allocator.alloc(utils.Ciphertext, b.len);
-
-    // Compute NOT b
-    for (b, 0..) |ct_b, i| {
-        not_b[i] = gates_impl.not(&ct_b);
-    }
-
-    const result = try add(server_key, a, not_b, cin, allocator);
-    allocator.free(not_b);
-
-    return result;
 }
 
 /// Encrypt a boolean value
@@ -144,7 +95,7 @@ pub fn main() !void {
 
     // Generate keys
     const secret_key = key.SecretKey.new();
-    var cloud_key = try key.CloudKey.new(allocator, &secret_key);
+    const cloud_key = try key.CloudKey.new(allocator, &secret_key);
     defer cloud_key.deinit(allocator);
 
     // Input numbers

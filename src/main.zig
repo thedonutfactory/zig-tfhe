@@ -1,60 +1,156 @@
+//! Zig TFHE Library
+//!
+//! A port of the rs-tfhe library to Zig, providing fully homomorphic encryption
+//! capabilities with the TFHE (Torus Fully Homomorphic Encryption) scheme.
+//!
+//! # Overview
+//!
+//! This library implements the TFHE scheme, which allows computation on encrypted data
+//! without decrypting it. It provides:
+//!
+//! - **TLWE**: Basic torus learning with errors encryption
+//! - **TRLWE**: Ring learning with errors over the torus
+//! - **TRGSW**: Gadget switching keys for bootstrapping
+//! - **FFT**: Fast Fourier transform for polynomial operations
+//! - **Gates**: Homomorphic logic gates (AND, OR, NOT, etc.)
+//! - **Bootstrap**: Noise reduction through bootstrapping
+//!
+//! # Usage Example
+//!
+//! ```zig
+//! const tfhe = @import("main");
+//! const std = @import("std");
+//!
+//! pub fn main() !void {
+//!     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+//!     defer _ = gpa.deinit();
+//!     const allocator = gpa.allocator();
+//!
+//!     // Generate keys
+//!     const secret_key = tfhe.key.SecretKey.new();
+//!     const cloud_key = try tfhe.key.CloudKey.new(allocator, &secret_key);
+//!     defer cloud_key.deinit(allocator);
+//!
+//!     // Encrypt data
+//!     const encrypted_a = try tfhe.tlwe.TLWELv0.encryptBool(true, tfhe.params.implementation.tlwe_lv0.ALPHA, &secret_key.key_lv0);
+//!     const encrypted_b = try tfhe.tlwe.TLWELv0.encryptBool(false, tfhe.params.implementation.tlwe_lv0.ALPHA, &secret_key.key_lv0);
+//!
+//!     // Perform homomorphic operations
+//!     const result = encrypted_a.add(&encrypted_b);
+//!
+//!     // Decrypt result
+//!     const decrypted = result.decryptBool(&secret_key.key_lv0);
+//!     std.debug.print("Result: {}\n", .{decrypted});
+//! }
+//! ```
+
 const std = @import("std");
 
-// Core modules
+// ============================================================================
+// CORE MODULES
+// ============================================================================
+
+/// Security parameters and configuration
 pub const params = @import("params.zig");
+
+/// Utility functions for torus operations and noise generation
 pub const utils = @import("utils.zig");
+
+/// Bit manipulation utilities
+pub const bit_utils = @import("bit_utils.zig");
+
+/// Fast Fourier Transform for polynomial operations
+pub const fft = @import("fft.zig");
+
+// ============================================================================
+// CRYPTOGRAPHIC PRIMITIVES
+// ============================================================================
+
+/// TLWE (Torus Learning With Errors) encryption
 pub const tlwe = @import("tlwe.zig");
+
+/// Key generation and management
+pub const key = @import("key.zig");
+
+// ============================================================================
+// HOMOMORPHIC OPERATIONS
+// ============================================================================
+
+// These modules will be added as we port them:
 pub const trlwe = @import("trlwe.zig");
 pub const trgsw = @import("trgsw.zig");
-pub const key = @import("key.zig");
 pub const gates = @import("gates.zig");
-pub const fft = @import("fft.zig");
+// pub const circuits = @import("circuits.zig");
 pub const bootstrap = @import("bootstrap.zig");
 pub const lut = @import("lut.zig");
+pub const parallel = @import("parallel.zig");
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+// ============================================================================
+// LIBRARY INFORMATION
+// ============================================================================
 
-    std.log.info("zig-tfhe: Zig TFHE Library", .{});
-    std.log.info("Basic example: Key generation and encryption", .{});
+/// Library version
+pub const version = "0.1.0";
 
-    // Generate keys
-    const secret_key = try key.SecretKey.init(allocator);
-    var cloud_key = try key.CloudKey.init(allocator, &secret_key);
-    defer cloud_key.deinit(allocator);
+/// Library name
+pub const name = "zig-tfhe";
 
-    std.log.info("Keys generated successfully", .{});
+/// Library description
+pub const description = "A Zig port of the rs-tfhe library for fully homomorphic encryption";
 
-    // Encrypt a boolean value
-    const ct_true = try utils.Ciphertext.encrypt(true, &secret_key.key_lv0, allocator);
-    const ct_false = try utils.Ciphertext.encrypt(false, &secret_key.key_lv0, allocator);
+// ============================================================================
+// CONVENIENCE FUNCTIONS
+// ============================================================================
 
-    std.log.info("Boolean values encrypted", .{});
+/// Get library information
+pub fn getInfo() struct { name: []const u8, version: []const u8, description: []const u8 } {
+    return .{
+        .name = name,
+        .version = version,
+        .description = description,
+    };
+}
 
-    // Decrypt to verify
-    const decrypted_true = ct_true.decrypt(&secret_key.key_lv0);
-    const decrypted_false = ct_false.decrypt(&secret_key.key_lv0);
+/// Print library information
+pub fn printInfo() void {
+    const info = getInfo();
+    std.debug.print("{} v{} - {s}\n", .{ info.name, info.version, info.description });
+}
 
-    std.log.info("Decrypted values: true={}, false={}", .{ decrypted_true, decrypted_false });
+// ============================================================================
+// TESTS
+// ============================================================================
 
-    // Test homomorphic AND gate
-    var gates_impl = gates.Gates.init(allocator, &cloud_key);
+test "library info" {
+    const info = getInfo();
+    try std.testing.expectEqualStrings("zig-tfhe", info.name);
+    try std.testing.expectEqualStrings("0.1.0", info.version);
+    try std.testing.expectEqualStrings("A Zig port of the rs-tfhe library for fully homomorphic encryption", info.description);
+}
 
-    // Debug: Test individual ciphertexts first
-    std.log.info("Debug: ct_true decrypts to: {}", .{ct_true.decrypt(&secret_key.key_lv0)});
-    std.log.info("Debug: ct_false decrypts to: {}", .{ct_false.decrypt(&secret_key.key_lv0)});
+test "basic functionality" {
+    // Test that we can create a secret key
+    const secret_key = key.SecretKey.new();
 
-    // Test simple addition first (without bootstrapping)
-    const simple_add = ct_true.add(&ct_false);
-    std.log.info("Debug: true + false (simple add) decrypts to: {}", .{simple_add.decrypt(&secret_key.key_lv0)});
+    // Test that we can encrypt and decrypt
+    const encrypted = try tlwe.TLWELv0.encryptBool(true, params.implementation.tlwe_lv0.ALPHA, &secret_key.key_lv0);
+    const decrypted = encrypted.decryptBool(&secret_key.key_lv0);
 
-    const result = try gates_impl.homAnd(&ct_true, &ct_false, allocator);
-    const decrypted_result = result.decrypt(&secret_key.key_lv0);
+    try std.testing.expect(decrypted == true);
+}
 
-    std.log.info("Homomorphic AND: true AND false = {}", .{decrypted_result});
-    std.debug.assert(decrypted_result == false);
-
-    std.log.info("Basic TFHE operations completed successfully!", .{});
+test "module imports" {
+    // Test that all core modules can be imported
+    _ = params;
+    _ = utils;
+    _ = bit_utils;
+    _ = fft;
+    _ = tlwe;
+    _ = trlwe;
+    _ = trgsw;
+    _ = gates;
+    _ = bootstrap;
+    _ = lut;
+    _ = parallel;
+    _ = key;
 }

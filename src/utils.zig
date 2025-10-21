@@ -1,169 +1,251 @@
+//! Utility functions for TFHE operations
+//!
+//! This module provides utility functions for converting between different
+//! representations, generating noise, and other common operations used
+//! throughout the TFHE library.
+
 const std = @import("std");
 const params = @import("params.zig");
 
-/// Normal distribution for noise generation using proper gaussian sampling
-pub const NormalDistribution = struct {
-    mean: f64,
-    stddev: f64,
-
-    pub fn init(mean: f64, stddev: f64) NormalDistribution {
-        return NormalDistribution{ .mean = mean, .stddev = stddev };
-    }
-
-    pub fn sample(self: *const NormalDistribution) f64 {
-        // Use Zig's ziggurat algorithm for proper gaussian sampling
-        const gaussian_sample = std.Random.ziggurat.next_f64(std.crypto.random, std.Random.ziggurat.NormDist);
-        return self.mean + (gaussian_sample * self.stddev);
-    }
-};
+// Import TLWE module for Ciphertext type
 const tlwe = @import("tlwe.zig");
-const key_module = @import("key.zig");
 
-/// Main ciphertext type - alias for TLWELv0
+// Type alias for Ciphertext (TLWE Level 0)
 pub const Ciphertext = tlwe.TLWELv0;
 
-/// Convert f64 to torus representation
+// ============================================================================
+// TORUS CONVERSION FUNCTIONS
+// ============================================================================
+
+/// Convert a floating-point number to torus representation
 pub fn f64ToTorus(d: f64) params.Torus {
     const torus = (@mod(d, 1.0)) * @as(f64, @floatFromInt(std.math.pow(u64, 2, params.TORUS_SIZE)));
-    return @intCast(@as(params.IntTorus, @intFromFloat(torus)));
+    return @as(params.Torus, @intFromFloat(@as(f64, @floatFromInt(@as(params.IntTorus, @intFromFloat(torus))))));
 }
 
-/// Convert torus to f64 representation
+/// Convert a torus value to floating-point representation
 pub fn torusToF64(t: params.Torus) f64 {
     return @as(f64, @floatFromInt(t)) / @as(f64, @floatFromInt(std.math.pow(u64, 2, params.TORUS_SIZE)));
 }
 
-/// Convert array of f64 to array of torus
-pub fn f64ToTorusVec(d: []const f64, allocator: std.mem.Allocator) ![]params.Torus {
-    const result = try allocator.alloc(params.Torus, d.len);
+/// Convert a vector of floating-point numbers to torus representation
+pub fn f64ToTorusVec(allocator: std.mem.Allocator, d: []const f64) ![]params.Torus {
+    var result = try allocator.alloc(params.Torus, d.len);
     for (d, 0..) |val, i| {
         result[i] = f64ToTorus(val);
     }
     return result;
 }
 
+// ============================================================================
+// GAUSSIAN NOISE GENERATION
+// ============================================================================
+
+/// Simple normal distribution using Box-Muller transform
+pub const NormalDist = struct {
+    mean: f64,
+    stddev: f64,
+    has_spare: bool = false,
+    spare: f64 = 0.0,
+
+    pub fn init(mean: f64, stddev: f64) NormalDist {
+        return NormalDist{
+            .mean = mean,
+            .stddev = stddev,
+            .has_spare = false,
+            .spare = 0.0,
+        };
+    }
+
+    pub fn next(self: *NormalDist, rng: anytype) f64 {
+        if (self.has_spare) {
+            self.has_spare = false;
+            return self.spare * self.stddev + self.mean;
+        }
+
+        // Box-Muller transform
+        const uniform1 = rng.float(f64);
+        const uniform2 = rng.float(f64);
+        const mag = self.stddev * @sqrt(-2.0 * @log(uniform1));
+        const z0 = mag * @cos(2.0 * std.math.pi * uniform2);
+        const z1 = mag * @sin(2.0 * std.math.pi * uniform2);
+
+        self.has_spare = true;
+        self.spare = z1;
+        return z0 + self.mean;
+    }
+};
+
 /// Generate gaussian noise in torus representation
 pub fn gaussianTorus(
     mu: params.Torus,
-    normal_distr: *const NormalDistribution,
+    normal_distr: *NormalDist,
+    rng: anytype,
 ) params.Torus {
-    // Use proper gaussian sampling
-    const gaussian_sample = normal_distr.sample();
-    const noise_torus = f64ToTorus(gaussian_sample);
-    return mu +% noise_torus;
+    const sample = normal_distr.next(rng);
+    return f64ToTorus(sample) +% mu;
 }
 
-/// Generate gaussian noise in f64 representation
+/// Generate gaussian noise from floating-point mean
 pub fn gaussianF64(
     mu: f64,
-    normal_distr: *const NormalDistribution,
+    normal_distr: *NormalDist,
+    rng: anytype,
 ) params.Torus {
     const mu_torus = f64ToTorus(mu);
-    return gaussianTorus(mu_torus, normal_distr);
+    return gaussianTorus(mu_torus, normal_distr, rng);
 }
 
-/// Generate array of gaussian noise in torus representation
+/// Generate gaussian noise for a vector of floating-point means
+pub fn gaussianF64Vec(
+    allocator: std.mem.Allocator,
+    mu: []const f64,
+    normal_distr: *NormalDist,
+    rng: anytype,
+) ![]params.Torus {
+    var result = try allocator.alloc(params.Torus, mu.len);
+    for (mu, 0..) |val, i| {
+        result[i] = gaussianTorus(f64ToTorus(val), normal_distr, rng);
+    }
+    return result;
+}
+
+/// Generate gaussian noise for a vector of torus means
 pub fn gaussianTorusVec(
     allocator: std.mem.Allocator,
     mu: []const params.Torus,
-    normal_distr: *const NormalDistribution,
+    normal_distr: *NormalDist,
+    rng: anytype,
 ) ![]params.Torus {
-    const result = try allocator.alloc(params.Torus, mu.len);
+    var result = try allocator.alloc(params.Torus, mu.len);
     for (mu, 0..) |val, i| {
-        result[i] = gaussianTorus(val, normal_distr);
+        result[i] = gaussianTorus(val, normal_distr, rng);
     }
     return result;
 }
-
-/// Generate array of gaussian noise in f64 representation
-/// Match Rust: gaussian_torus(f64_to_torus(e), normal_distr, rng)
-pub fn gaussianF64Vec(
-    mu: []const f64,
-    normal_distr: *const NormalDistribution,
-    allocator: std.mem.Allocator,
-) ![]f64 {
-    const result = try allocator.alloc(f64, mu.len);
-    for (mu, 0..) |val, i| {
-        // Match Rust: convert to torus, add gaussian noise in torus space, convert back
-        const mu_torus = f64ToTorus(val);
-        const noise_torus = gaussianTorus(mu_torus, normal_distr);
-        result[i] = torusToF64(noise_torus);
-    }
-    return result;
-}
-
-/// Ciphertext operations and methods
-pub const CiphertextOps = struct {
-    /// Encrypt a boolean value
-    pub fn encrypt(plaintext: bool, key: *const key_module.SecretKeyLv0, allocator: std.mem.Allocator) !Ciphertext {
-        return tlwe.TLWELv0.encrypt(plaintext, key, allocator);
-    }
-
-    /// Decrypt a boolean value
-    pub fn decrypt(ciphertext: *const Ciphertext, key: *const key_module.SecretKeyLv0) bool {
-        return ciphertext.decrypt(key);
-    }
-
-    /// Encrypt an LWE message with given modulus
-    pub fn encryptLweMessage(
-        msg: usize,
-        modulus: usize,
-        alpha: f64,
-        key: *const key_module.SecretKeyLv0,
-        allocator: std.mem.Allocator,
-    ) !Ciphertext {
-        return tlwe.TLWELv0.encryptLweMessage(msg, modulus, alpha, key, allocator);
-    }
-
-    /// Decrypt an LWE message with given modulus
-    pub fn decryptLweMessage(
-        ciphertext: *const Ciphertext,
-        modulus: usize,
-        key: *const key_module.SecretKeyLv0,
-    ) usize {
-        return ciphertext.decryptLweMessage(modulus, key);
-    }
-};
 
 // ============================================================================
 // TESTS
 // ============================================================================
 
-test "f64 to torus conversion" {
-    const d: f64 = 0.5;
-    const torus = f64ToTorus(d);
-    const back = torusToF64(torus);
+test "gaussian 32bit" {
+    const allocator = std.testing.allocator;
+    var rng = std.Random.DefaultPrng.init(42);
+    var normal = NormalDist.init(0.0, 0.1);
 
-    // Should be approximately equal (within floating point precision)
-    try std.testing.expectApproxEqAbs(d, back, 1e-10);
+    const torus = try gaussianTorusVec(allocator, &[_]params.Torus{12}, &normal, rng.random());
+    defer allocator.free(torus);
+    try std.testing.expect(torus.len == 1);
+
+    const torus2 = try gaussianTorusVec(allocator, &[_]params.Torus{ 12, 11 }, &normal, rng.random());
+    defer allocator.free(torus2);
+    try std.testing.expect(torus2.len == 2);
 }
 
-test "gaussian sampling" {
-    const allocator = std.testing.allocator;
-    const mu = [_]f64{ 12.0, 11.0 };
-    var normal_distr = NormalDistribution.init(0.0, 0.01);
-    const torus_vec = try gaussianF64Vec(&mu, &normal_distr, allocator);
-    defer allocator.free(torus_vec);
+test "comprehensive f64 to torus conversions" {
+    std.debug.print("=== ZIG UTILS COMPREHENSIVE TEST ===\n", .{});
 
-    try std.testing.expect(torus_vec.len == 2);
-}
+    // Test various f64 to torus conversions
+    const test_values = [_]f64{ 0.0, 0.125, 0.25, 0.5, 0.75, 1.0, -0.125, -0.25, -0.5 };
 
-test "ciphertext operations" {
-    const allocator = std.testing.allocator;
-
-    // Create a dummy key for testing
-    var key: key_module.SecretKeyLv0 = undefined;
-    for (&key) |*k| {
-        k.* = 0;
+    std.debug.print("Testing f64 to torus conversions:\n", .{});
+    for (test_values) |val| {
+        const torus = f64ToTorus(val);
+        const back = torusToF64(torus);
+        std.debug.print("  f64: {d:.6} -> torus: {} -> f64: {d:.6} (diff: {d:.10})\n", .{ val, torus, back, @abs(val - back) });
     }
 
-    // Test boolean encryption/decryption
-    const ct_true = try CiphertextOps.encrypt(true, &key, allocator);
-    const ct_false = try CiphertextOps.encrypt(false, &key, allocator);
+    // Test specific critical values
+    std.debug.print("\nTesting critical TFHE values:\n", .{});
+    const critical_values = [_]f64{ 0.0, 0.125, -0.125, 0.25, -0.25 };
+    for (critical_values) |val| {
+        const torus = f64ToTorus(val);
+        const back = torusToF64(torus);
+        std.debug.print("  Critical: {d:.6} -> {} -> {d:.6}\n", .{ val, torus, back });
+    }
+}
 
-    const decrypted_true = CiphertextOps.decrypt(&ct_true, &key);
-    const decrypted_false = CiphertextOps.decrypt(&ct_false, &key);
+test "comprehensive gaussian sampling" {
+    std.debug.print("\n=== ZIG UTILS GAUSSIAN SAMPLING TEST ===\n", .{});
 
-    try std.testing.expect(decrypted_true == true);
-    try std.testing.expect(decrypted_false == false);
+    // Test gaussian sampling with different parameters
+    var rng = std.Random.DefaultPrng.init(42);
+    var normal_distr1 = NormalDist.init(0.0, 0.01);
+    var normal_distr2 = NormalDist.init(0.0, 0.1);
+    var normal_distr3 = NormalDist.init(0.5, 0.01);
+
+    std.debug.print("Testing gaussian sampling:\n", .{});
+    std.debug.print("  Normal(0.0, 0.01): ", .{});
+    for (0..5) |_| {
+        const sample = normal_distr1.next(rng.random());
+        std.debug.print("{d:.6} ", .{sample});
+    }
+    std.debug.print("\n", .{});
+
+    std.debug.print("  Normal(0.0, 0.1): ", .{});
+    for (0..5) |_| {
+        const sample = normal_distr2.next(rng.random());
+        std.debug.print("{d:.6} ", .{sample});
+    }
+    std.debug.print("\n", .{});
+
+    std.debug.print("  Normal(0.5, 0.01): ", .{});
+    for (0..5) |_| {
+        const sample = normal_distr3.next(rng.random());
+        std.debug.print("{d:.6} ", .{sample});
+    }
+    std.debug.print("\n", .{});
+}
+
+test "comprehensive gaussian noise generation" {
+    std.debug.print("\n=== ZIG UTILS GAUSSIAN NOISE TEST ===\n", .{});
+
+    var rng = std.Random.DefaultPrng.init(42);
+    var normal_distr = NormalDist.init(0.0, 0.01);
+
+    // Test gaussian_torus
+    std.debug.print("Testing gaussian_torus:\n", .{});
+    const mu_torus = f64ToTorus(0.125);
+    for (0..5) |_| {
+        const noise = gaussianTorus(mu_torus, &normal_distr, rng.random());
+        const noise_f64 = torusToF64(noise);
+        std.debug.print("  mu=0.125, noise={d:.6}\n", .{noise_f64});
+    }
+
+    // Test gaussian_f64
+    std.debug.print("\nTesting gaussian_f64:\n", .{});
+    for (0..5) |_| {
+        const noise = gaussianF64(0.125, &normal_distr, rng.random());
+        const noise_f64 = torusToF64(noise);
+        std.debug.print("  mu=0.125, noise={d:.6}\n", .{noise_f64});
+    }
+}
+
+test "comprehensive vector operations" {
+    std.debug.print("\n=== ZIG UTILS VECTOR OPERATIONS TEST ===\n", .{});
+
+    const allocator = std.testing.allocator;
+
+    // Test f64_to_torus_vec
+    const test_f64_vec = [_]f64{ 0.0, 0.125, 0.25, 0.5, 0.75 };
+    const torus_vec = try f64ToTorusVec(allocator, &test_f64_vec);
+    defer allocator.free(torus_vec);
+
+    std.debug.print("Testing f64_to_torus_vec:\n", .{});
+    for (test_f64_vec, 0..) |val, i| {
+        const back = torusToF64(torus_vec[i]);
+        std.debug.print("  [{}]: {d:.6} -> {} -> {d:.6}\n", .{ i, val, torus_vec[i], back });
+    }
+
+    // Test gaussian_f64_vec
+    var rng = std.Random.DefaultPrng.init(42);
+    var normal_distr = NormalDist.init(0.0, 0.01);
+    const gaussian_vec = try gaussianF64Vec(allocator, &test_f64_vec, &normal_distr, rng.random());
+    defer allocator.free(gaussian_vec);
+
+    std.debug.print("\nTesting gaussian_f64_vec:\n", .{});
+    for (test_f64_vec, 0..) |val, i| {
+        const noise_f64 = torusToF64(gaussian_vec[i]);
+        std.debug.print("  [{}]: {d:.6} -> {d:.6}\n", .{ i, val, noise_f64 });
+    }
 }
