@@ -421,25 +421,13 @@ test "delta function test" {
     const output = try processor.fft(freq);
     defer allocator.free(output);
 
-    // Debug output
-    std.debug.print("Delta function test:\n", .{});
-    std.debug.print("  Input: ", .{});
-    for (0..N) |i| {
-        std.debug.print("{} ", .{input[i]});
-    }
-    std.debug.print("\n", .{});
-    std.debug.print("  Output: ", .{});
-    for (0..N) |i| {
-        std.debug.print("{} ", .{output[i]});
-    }
-    std.debug.print("\n", .{});
+    // Debug output removed
 
     // Check accuracy - should be close
     const diff = if (input[0] >= output[0])
         @as(i64, @intCast(input[0] - output[0]))
     else
         @as(i64, @intCast(output[0] - input[0]));
-    std.debug.print("  input[0]={}, output[0]={}, diff={}\n", .{ input[0], output[0], diff });
 
     // For now, allow larger tolerance to see what's happening
     try std.testing.expect(@abs(diff) < 1000);
@@ -567,8 +555,6 @@ test "fft ifft 1024" {
         }
     }
 
-    std.debug.print("Max difference: {}\n", .{max_diff});
-
     for (0..N) |i| {
         const diff = if (a[i] >= res[i])
             @as(i32, @intCast(a[i] - res[i]))
@@ -641,7 +627,6 @@ test "klemsa roundtrip" {
         }
     }
 
-    std.debug.print("Klemsa roundtrip error: {}\n", .{max_diff});
     try std.testing.expect(max_diff < 2);
 }
 

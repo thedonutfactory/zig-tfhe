@@ -642,7 +642,7 @@ test "trgsw blind rotate" {
     const try_num: usize = 10; // Increased for better statistics
     var success_count: usize = 0;
 
-    for (0..try_num) |i| {
+    for (0..try_num) |_| {
         const plain_text = rng.random().boolean();
 
         // Encrypt TLWE
@@ -661,9 +661,7 @@ test "trgsw blind rotate" {
 
         if (plain_text == dec) {
             success_count += 1;
-        } else {
-            std.debug.print("Iteration {}: plain_text={}, dec={}, FAILED\n", .{ i, plain_text, dec });
-        }
+        } else {}
     }
 
     // Expect at least 60% success rate due to noise (blind rotate is complex)

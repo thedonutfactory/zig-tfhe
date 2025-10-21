@@ -367,7 +367,6 @@ test "gates all NOT cases" {
         const result = gates.not(&ct_a);
         const decrypted = result.decryptBool(&secret_key.key_lv0);
 
-        std.debug.print("NOT {} = {} (expected: {})\n", .{ a, decrypted, expected });
         try std.testing.expect(decrypted == expected);
     }
 }
@@ -395,7 +394,6 @@ test "gates all NAND cases" {
         const result = try gates.nand(&ct_a, &ct_b, &cloud_key);
         const decrypted = result.decryptBool(&secret_key.key_lv0);
 
-        std.debug.print("{} NAND {} = {} (expected: {})\n", .{ a, b, decrypted, expected });
         try std.testing.expect(decrypted == expected);
     }
 }
@@ -427,7 +425,6 @@ test "gates all AND cases" {
         const result = try gates.andGate(&ct_a, &ct_b, &cloud_key);
         const decrypted = result.decryptBool(&secret_key.key_lv0);
 
-        std.debug.print("{} AND {} = {} (expected: {})\n", .{ a, b, decrypted, expected });
         try std.testing.expect(decrypted == expected);
     }
 }
@@ -455,7 +452,6 @@ test "gates all OR cases" {
         const result = try gates.orGate(&ct_a, &ct_b, &cloud_key);
         const decrypted = result.decryptBool(&secret_key.key_lv0);
 
-        std.debug.print("{} OR {} = {} (expected: {})\n", .{ a, b, decrypted, expected });
         try std.testing.expectEqual(expected, decrypted);
     }
 }
@@ -483,7 +479,6 @@ test "gates all XOR cases" {
         const result = try gates.xor(&ct_a, &ct_b, &cloud_key);
         const decrypted = result.decryptBool(&secret_key.key_lv0);
 
-        std.debug.print("{} XOR {} = {} (expected: {})\n", .{ a, b, decrypted, expected });
         try std.testing.expectEqual(expected, decrypted);
     }
 }
@@ -511,7 +506,6 @@ test "gates all NOR cases" {
         const result = try gates.nor(&ct_a, &ct_b, &cloud_key);
         const decrypted = result.decryptBool(&secret_key.key_lv0);
 
-        std.debug.print("{} NOR {} = {} (expected: {})\n", .{ a, b, decrypted, expected });
         try std.testing.expectEqual(expected, decrypted);
     }
 }
@@ -545,7 +539,6 @@ test "gates mux naive" {
         const result = try gates.muxNaive(&ct_a, &ct_b, &ct_c, &cloud_key);
         const decrypted = result.decryptBool(&secret_key.key_lv0);
 
-        std.debug.print("MUX({}, {}, {}) = {} (expected: {})\n", .{ a, b, c, decrypted, expected });
         try std.testing.expectEqual(expected, decrypted);
     }
 }

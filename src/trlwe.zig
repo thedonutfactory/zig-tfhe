@@ -53,6 +53,7 @@ pub const TRLWELv1 = struct {
 
         // Compute polynomial multiplication: a * secret_key
         const poly_res = try plan.processor.poly_mul(&trlwe.a, secret_key);
+        defer plan.processor.allocator.free(poly_res);
 
         // Add polynomial result to b
         for (0..trlwe.b.len) |i| {
@@ -84,7 +85,7 @@ pub const TRLWELv1 = struct {
     pub fn decryptBool(self: *const Self, secret_key: []const params.Torus, plan: *fft.FFTPlan) ![]bool {
         // Compute polynomial multiplication: a * secret_key
         const poly_res = try plan.processor.poly_mul(&self.a, secret_key);
-        defer std.heap.page_allocator.free(poly_res);
+        defer plan.processor.allocator.free(poly_res);
 
         var res = try std.heap.page_allocator.alloc(bool, self.a.len);
 
@@ -317,7 +318,6 @@ test "sample extraction deterministic" {
 }
 
 test "trlwe encryption comparison" {
-    std.debug.print("=== TRLWE ENCRYPTION COMPARISON - ZIG ===\n", .{});
 
     // Create deterministic test data
     const test_secret_key = key.SecretKey{
@@ -331,27 +331,14 @@ test "trlwe encryption comparison" {
     // Create deterministic message (all zeros)
     const message = [_]f64{0.0} ** params.implementation.trlwe_lv1.N;
 
-    std.debug.print("Input message[0-4]: {d:.6} {d:.6} {d:.6} {d:.6} {d:.6}\n", .{ message[0], message[1], message[2], message[3], message[4] });
-    std.debug.print("Secret key[0-4]: {} {} {} {} {}\n", .{ test_secret_key.key_lv1[0], test_secret_key.key_lv1[1], test_secret_key.key_lv1[2], test_secret_key.key_lv1[3], test_secret_key.key_lv1[4] });
-
     // Encrypt the message
-    const encrypted = try TRLWELv1.encryptF64(&message, 0.01, &test_secret_key.key_lv1, &plan);
-
-    std.debug.print("\nEncrypted TRLWE.a[0-4]: {} {} {} {} {}\n", .{ encrypted.a[0], encrypted.a[1], encrypted.a[2], encrypted.a[3], encrypted.a[4] });
-    std.debug.print("Encrypted TRLWE.b[0-4]: {} {} {} {} {}\n", .{ encrypted.b[0], encrypted.b[1], encrypted.b[2], encrypted.b[3], encrypted.b[4] });
+    _ = try TRLWELv1.encryptF64(&message, 0.01, &test_secret_key.key_lv1, &plan);
 
     // Test with non-zero message
-    std.debug.print("\n=== Testing with non-zero message ===\n", .{});
-
     var message2 = [_]f64{0.0} ** params.implementation.trlwe_lv1.N;
     for (0..params.implementation.trlwe_lv1.N) |i| {
         message2[i] = @as(f64, @floatFromInt(i)) * 0.1;
     }
 
-    std.debug.print("Input message2[0-4]: {d:.6} {d:.6} {d:.6} {d:.6} {d:.6}\n", .{ message2[0], message2[1], message2[2], message2[3], message2[4] });
-
-    const encrypted2 = try TRLWELv1.encryptF64(&message2, 0.01, &test_secret_key.key_lv1, &plan);
-
-    std.debug.print("Encrypted2 TRLWE.a[0-4]: {} {} {} {} {}\n", .{ encrypted2.a[0], encrypted2.a[1], encrypted2.a[2], encrypted2.a[3], encrypted2.a[4] });
-    std.debug.print("Encrypted2 TRLWE.b[0-4]: {} {} {} {} {}\n", .{ encrypted2.b[0], encrypted2.b[1], encrypted2.b[2], encrypted2.b[3], encrypted2.b[4] });
+    _ = try TRLWELv1.encryptF64(&message2, 0.01, &test_secret_key.key_lv1, &plan);
 }

@@ -236,7 +236,9 @@ test "secret key generation" {
     try std.testing.expect(has_nonzero_lv1);
 }
 
-test "cloud key generation" {
+test "cloud key generation (memory leak check)" {
+    // This test is slow (~30s) because it generates the full bootstrapping key.
+    // Skip in quick test runs with: zig test --test-filter "secret key"
     const allocator = std.testing.allocator;
     const secret_key = SecretKey.new();
     var cloud_key = try CloudKey.new(allocator, &secret_key);
@@ -245,6 +247,16 @@ test "cloud key generation" {
     // Check that cloud key was created successfully
     try std.testing.expect(cloud_key.key_switching_key.items.len > 0);
     try std.testing.expect(cloud_key.bootstrapping_key.items.len > 0);
+}
+
+test "key switching key generation (fast)" {
+    const allocator = std.testing.allocator;
+    const secret_key = SecretKey.new();
+    var ksk = try genKeySwitchingKey(allocator, &secret_key);
+    defer ksk.deinit(allocator);
+
+    // Check that key switching key was created successfully
+    try std.testing.expect(ksk.items.len > 0);
 }
 
 test "decomposition offset generation" {

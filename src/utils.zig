@@ -142,87 +142,66 @@ test "gaussian 32bit" {
 }
 
 test "comprehensive f64 to torus conversions" {
-    std.debug.print("=== ZIG UTILS COMPREHENSIVE TEST ===\n", .{});
-
     // Test various f64 to torus conversions
     const test_values = [_]f64{ 0.0, 0.125, 0.25, 0.5, 0.75, 1.0, -0.125, -0.25, -0.5 };
 
-    std.debug.print("Testing f64 to torus conversions:\n", .{});
     for (test_values) |val| {
         const torus = f64ToTorus(val);
         const back = torusToF64(torus);
-        std.debug.print("  f64: {d:.6} -> torus: {} -> f64: {d:.6} (diff: {d:.10})\n", .{ val, torus, back, @abs(val - back) });
+        _ = back;
     }
 
     // Test specific critical values
-    std.debug.print("\nTesting critical TFHE values:\n", .{});
     const critical_values = [_]f64{ 0.0, 0.125, -0.125, 0.25, -0.25 };
     for (critical_values) |val| {
         const torus = f64ToTorus(val);
         const back = torusToF64(torus);
-        std.debug.print("  Critical: {d:.6} -> {} -> {d:.6}\n", .{ val, torus, back });
+        _ = back;
     }
 }
 
 test "comprehensive gaussian sampling" {
-    std.debug.print("\n=== ZIG UTILS GAUSSIAN SAMPLING TEST ===\n", .{});
-
     // Test gaussian sampling with different parameters
     var rng = std.Random.DefaultPrng.init(42);
     var normal_distr1 = NormalDist.init(0.0, 0.01);
     var normal_distr2 = NormalDist.init(0.0, 0.1);
     var normal_distr3 = NormalDist.init(0.5, 0.01);
 
-    std.debug.print("Testing gaussian sampling:\n", .{});
-    std.debug.print("  Normal(0.0, 0.01): ", .{});
     for (0..5) |_| {
         const sample = normal_distr1.next(rng.random());
-        std.debug.print("{d:.6} ", .{sample});
+        _ = sample;
     }
-    std.debug.print("\n", .{});
 
-    std.debug.print("  Normal(0.0, 0.1): ", .{});
     for (0..5) |_| {
         const sample = normal_distr2.next(rng.random());
-        std.debug.print("{d:.6} ", .{sample});
+        _ = sample;
     }
-    std.debug.print("\n", .{});
 
-    std.debug.print("  Normal(0.5, 0.01): ", .{});
     for (0..5) |_| {
         const sample = normal_distr3.next(rng.random());
-        std.debug.print("{d:.6} ", .{sample});
+        _ = sample;
     }
-    std.debug.print("\n", .{});
 }
 
 test "comprehensive gaussian noise generation" {
-    std.debug.print("\n=== ZIG UTILS GAUSSIAN NOISE TEST ===\n", .{});
-
     var rng = std.Random.DefaultPrng.init(42);
     var normal_distr = NormalDist.init(0.0, 0.01);
 
     // Test gaussian_torus
-    std.debug.print("Testing gaussian_torus:\n", .{});
     const mu_torus = f64ToTorus(0.125);
     for (0..5) |_| {
         const noise = gaussianTorus(mu_torus, &normal_distr, rng.random());
-        const noise_f64 = torusToF64(noise);
-        std.debug.print("  mu=0.125, noise={d:.6}\n", .{noise_f64});
+        _ = torusToF64(noise);
     }
 
     // Test gaussian_f64
-    std.debug.print("\nTesting gaussian_f64:\n", .{});
     for (0..5) |_| {
         const noise = gaussianF64(0.125, &normal_distr, rng.random());
-        const noise_f64 = torusToF64(noise);
-        std.debug.print("  mu=0.125, noise={d:.6}\n", .{noise_f64});
+        _ = torusToF64(noise);
     }
 }
 
 test "comprehensive vector operations" {
-    std.debug.print("\n=== ZIG UTILS VECTOR OPERATIONS TEST ===\n", .{});
-
     const allocator = std.testing.allocator;
 
     // Test f64_to_torus_vec
@@ -230,10 +209,8 @@ test "comprehensive vector operations" {
     const torus_vec = try f64ToTorusVec(allocator, &test_f64_vec);
     defer allocator.free(torus_vec);
 
-    std.debug.print("Testing f64_to_torus_vec:\n", .{});
-    for (test_f64_vec, 0..) |val, i| {
-        const back = torusToF64(torus_vec[i]);
-        std.debug.print("  [{}]: {d:.6} -> {} -> {d:.6}\n", .{ i, val, torus_vec[i], back });
+    for (torus_vec) |t| {
+        _ = torusToF64(t);
     }
 
     // Test gaussian_f64_vec
@@ -242,9 +219,7 @@ test "comprehensive vector operations" {
     const gaussian_vec = try gaussianF64Vec(allocator, &test_f64_vec, &normal_distr, rng.random());
     defer allocator.free(gaussian_vec);
 
-    std.debug.print("\nTesting gaussian_f64_vec:\n", .{});
-    for (test_f64_vec, 0..) |val, i| {
-        const noise_f64 = torusToF64(gaussian_vec[i]);
-        std.debug.print("  [{}]: {d:.6} -> {d:.6}\n", .{ i, val, noise_f64 });
+    for (gaussian_vec) |g| {
+        _ = torusToF64(g);
     }
 }
