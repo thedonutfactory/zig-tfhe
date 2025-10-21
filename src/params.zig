@@ -1,50 +1,38 @@
-//! TFHE Security Parameter Selection
+//! TFHE security parameter selection and configuration.
 //!
-//! This library supports multiple security levels to allow users to choose
-//! the right balance between performance and security for their use case.
+//! This library supports multiple security levels: 80-bit (fast, for development/testing),
+//! 110-bit (balanced, original TFHE reference), 128-bit (high security, quantum-resistant,
+//! default), and specialized Uint1-Uint8 parameters for different message moduli.
 //!
-//! # Available Security Levels
+//! The security level is determined by several cryptographic parameters: N (LWE dimension,
+//! higher = more secure, slower), ALPHA (noise standard deviation, smaller = often more
+//! secure with proper dimension), L (gadget decomposition levels, more = more secure,
+//! slower), and BGBIT (decomposition base bits, smaller = more levels, more secure, slower).
 //!
-//! - **80-bit**: Fast performance, suitable for development/testing
-//! - **110-bit**: Balanced performance and security (original TFHE reference)
-//! - **128-bit**: High security, quantum-resistant (default)
-//! - **Uint1-Uint8**: Specialized parameters for different message moduli
-//!
-//! # Security Parameters Explained
-//!
-//! The security level is determined by several cryptographic parameters:
-//! - `N`: LWE dimension (higher = more secure, slower)
-//! - `ALPHA`: Noise standard deviation (smaller = often more secure with proper dimension)
-//! - `L`: Gadget decomposition levels (more = more secure, slower)
-//! - `BGBIT`: Decomposition base bits (smaller = more levels, more secure, slower)
-//!
-//! # Usage Example
-//!
+//! Example usage:
 //! ```zig
 //! const params = @import("params");
-//!
-//! // Use 128-bit security (default)
-//! const security_params = params.SECURITY_128_BIT;
+//! const security_params = params.SECURITY_128_BIT; // Use 128-bit security (default)
 //! ```
 
 const std = @import("std");
 
-// ============================================================================
-// TYPE DEFINITIONS
-// ============================================================================
-
+/// Torus element type (unsigned 32-bit integer).
 pub const Torus = u32;
+
+/// Half-torus element type (signed 32-bit integer).
 pub const HalfTorus = i32;
+
+/// Extended torus element type (signed 64-bit integer).
 pub const IntTorus = i64;
 
+/// Size of torus in bits.
 pub const TORUS_SIZE: usize = @sizeOf(Torus) * 8;
+
+/// Zero element on the torus.
 pub const ZERO_TORUS: Torus = 0;
 
-// ============================================================================
-// PARAMETER STRUCTURES
-// ============================================================================
-
-/// Security parameter set containing all TFHE parameters
+/// Security parameter set containing all TFHE parameters.
 pub const SecurityParams = struct {
     security_bits: usize,
     description: []const u8,
@@ -54,16 +42,19 @@ pub const SecurityParams = struct {
     trgsw_lv1: TrgswParams,
 };
 
+/// TLWE parameters (dimension and noise).
 pub const TlweParams = struct {
     n: usize,
     alpha: f64,
 };
 
+/// TRLWE parameters (dimension and noise).
 pub const TrlweParams = struct {
     n: usize,
     alpha: f64,
 };
 
+/// TRGSW parameters (dimension, decomposition, and noise).
 pub const TrgswParams = struct {
     n: usize,
     nbit: usize,
@@ -75,11 +66,7 @@ pub const TrgswParams = struct {
     alpha: f64,
 };
 
-// ============================================================================
-// SECURITY PARAMETER CONSTANTS
-// ============================================================================
-
-/// 80-bit security parameters (performance-optimized)
+/// 80-bit security parameters (performance-optimized).
 pub const SECURITY_80_BIT: SecurityParams = SecurityParams{
     .security_bits = 80,
     .description = "80-bit security (performance-optimized)",
@@ -107,7 +94,7 @@ pub const SECURITY_80_BIT: SecurityParams = SecurityParams{
     },
 };
 
-/// 110-bit security parameters (balanced, original TFHE)
+/// 110-bit security parameters (balanced, original TFHE).
 pub const SECURITY_110_BIT: SecurityParams = SecurityParams{
     .security_bits = 110,
     .description = "110-bit security (balanced, original TFHE)",
@@ -135,7 +122,7 @@ pub const SECURITY_110_BIT: SecurityParams = SecurityParams{
     },
 };
 
-/// Uint1 parameters (1-bit binary/boolean, messageModulus=2)
+/// Uint1 parameters (1-bit binary/boolean, messageModulus=2).
 pub const SECURITY_UINT1: SecurityParams = SecurityParams{
     .security_bits = 1,
     .description = "Uint1 parameters (1-bit binary/boolean, messageModulus=2, N=1024)",
@@ -163,7 +150,7 @@ pub const SECURITY_UINT1: SecurityParams = SecurityParams{
     },
 };
 
-/// Uint2 parameters (2-bit messages, messageModulus=4)
+/// Uint2 parameters (2-bit messages, messageModulus=4).
 pub const SECURITY_UINT2: SecurityParams = SecurityParams{
     .security_bits = 2,
     .description = "Uint2 parameters (2-bit messages, messageModulus=4, N=1024)",
@@ -191,7 +178,7 @@ pub const SECURITY_UINT2: SecurityParams = SecurityParams{
     },
 };
 
-/// Uint3 parameters (3-bit messages, messageModulus=8)
+/// Uint3 parameters (3-bit messages, messageModulus=8).
 pub const SECURITY_UINT3: SecurityParams = SecurityParams{
     .security_bits = 3,
     .description = "Uint3 parameters (3-bit messages, messageModulus=8, N=1024)",
@@ -219,7 +206,7 @@ pub const SECURITY_UINT3: SecurityParams = SecurityParams{
     },
 };
 
-/// Uint4 parameters (4-bit messages, messageModulus=16)
+/// Uint4 parameters (4-bit messages, messageModulus=16).
 pub const SECURITY_UINT4: SecurityParams = SecurityParams{
     .security_bits = 4,
     .description = "Uint4 parameters (4-bit messages, messageModulus=16, N=1024)",
@@ -247,7 +234,7 @@ pub const SECURITY_UINT4: SecurityParams = SecurityParams{
     },
 };
 
-/// Uint5 parameters (5-bit messages, messageModulus=32) - Recommended for complex arithmetic
+/// Uint5 parameters (5-bit messages, messageModulus=32, recommended for complex arithmetic).
 pub const SECURITY_UINT5: SecurityParams = SecurityParams{
     .security_bits = 5,
     .description = "Uint5 parameters (5-bit messages, messageModulus=32, N=1024)",
@@ -275,7 +262,7 @@ pub const SECURITY_UINT5: SecurityParams = SecurityParams{
     },
 };
 
-/// Uint6 parameters (6-bit messages, messageModulus=64)
+/// Uint6 parameters (6-bit messages, messageModulus=64).
 pub const SECURITY_UINT6: SecurityParams = SecurityParams{
     .security_bits = 6,
     .description = "Uint6 parameters (6-bit messages, messageModulus=64, N=1024)",
@@ -303,7 +290,7 @@ pub const SECURITY_UINT6: SecurityParams = SecurityParams{
     },
 };
 
-/// Uint7 parameters (7-bit messages, messageModulus=128)
+/// Uint7 parameters (7-bit messages, messageModulus=128).
 pub const SECURITY_UINT7: SecurityParams = SecurityParams{
     .security_bits = 7,
     .description = "Uint7 parameters (7-bit messages, messageModulus=128, N=1024)",
@@ -331,7 +318,7 @@ pub const SECURITY_UINT7: SecurityParams = SecurityParams{
     },
 };
 
-/// Uint8 parameters (8-bit messages, messageModulus=256)
+/// Uint8 parameters (8-bit messages, messageModulus=256).
 pub const SECURITY_UINT8: SecurityParams = SecurityParams{
     .security_bits = 8,
     .description = "Uint8 parameters (8-bit messages, messageModulus=256, N=1024)",
@@ -359,7 +346,7 @@ pub const SECURITY_UINT8: SecurityParams = SecurityParams{
     },
 };
 
-/// 128-bit security parameters (default, high security, quantum-resistant)
+/// 128-bit security parameters (default, high security, quantum-resistant).
 pub const SECURITY_128_BIT: SecurityParams = SecurityParams{
     .security_bits = 128,
     .description = "128-bit security (high security, quantum-resistant)",
@@ -387,23 +374,15 @@ pub const SECURITY_128_BIT: SecurityParams = SecurityParams{
     },
 };
 
-// ============================================================================
-// DEFAULT PARAMETER SELECTION
-// ============================================================================
-
-/// Default security parameters (128-bit)
+/// Default security parameters (128-bit).
 pub const DEFAULT_SECURITY: SecurityParams = SECURITY_128_BIT;
 
-/// Get a description of the current security level
+/// Get a description of the current security level.
 pub fn securityInfo(allocator: std.mem.Allocator, params: SecurityParams) ![]u8 {
     return std.fmt.allocPrint(allocator, "Security level: {} bits ({s})", .{ params.security_bits, params.description });
 }
 
-// ============================================================================
-// COMPATIBILITY ALIASES - For backwards compatibility with existing code
-// ============================================================================
-
-/// Compatibility module for existing code that expects the old parameter structure
+/// Compatibility module for existing code that expects the old parameter structure.
 pub const implementation = struct {
     // Use 128-bit parameters as default for compatibility
     pub const SECURITY_BITS: usize = SECURITY_128_BIT.security_bits;
@@ -436,13 +415,11 @@ pub const implementation = struct {
     };
 };
 
-// Additional compatibility constants
+/// Key-switching key noise parameter (compatibility constant).
 pub const KSK_ALPHA: f64 = SECURITY_128_BIT.tlwe_lv0.alpha;
-pub const BSK_ALPHA: f64 = SECURITY_128_BIT.tlwe_lv1.alpha;
 
-// ============================================================================
-// TESTS
-// ============================================================================
+/// Bootstrapping key noise parameter (compatibility constant).
+pub const BSK_ALPHA: f64 = SECURITY_128_BIT.tlwe_lv1.alpha;
 
 test "security info" {
     const allocator = std.testing.allocator;

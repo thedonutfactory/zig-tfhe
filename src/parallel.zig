@@ -16,14 +16,14 @@ pub const rayon_impl = @import("parallel/rayon_impl.zig");
 
 pub const RayonRailgun = rayon_impl.RayonRailgun;
 
-/// Configuration for parallel execution
+/// Configuration for parallel execution.
 pub const ParallelConfig = struct {
-    /// Stack size per thread (in bytes)
+    /// Stack size per thread (in bytes).
     stack_size: ?usize,
-    /// Number of threads (None = automatic)
+    /// Number of threads (None = automatic).
     num_threads: ?usize,
 
-    /// Create a default parallel configuration
+    /// Create a default parallel configuration.
     pub fn default() ParallelConfig {
         return ParallelConfig{
             .stack_size = 8 * 1024 * 1024, // 8MB default for FHE operations
@@ -35,20 +35,20 @@ pub const ParallelConfig = struct {
 // Note: In Zig, we don't need a trait abstraction for this use case.
 // The RayonRailgun struct provides the concrete implementation directly.
 
-/// Global default parallelization backend (singleton)
+/// Global default parallelization backend (singleton).
 ///
 /// This is used by default throughout the library unless explicitly overridden.
 /// It uses a simple implementation with sensible defaults for FHE operations.
 ///
-/// # Performance
+/// # Performance.
 ///
-/// This singleton is implemented using a simple global variable for zero-cost access:
-/// - First call: Initializes the singleton (one-time cost)
-/// - Subsequent calls: Simply returns a reference (zero overhead)
-/// - Thread-safe without locks after initialization
-/// - No heap allocations after first call
+/// This singleton is implemented using a simple global variable for zero-cost access:.
+/// - First call: Initializes the singleton (one-time cost).
+/// - Subsequent calls: Simply returns a reference (zero overhead).
+/// - Thread-safe without locks after initialization.
+/// - No heap allocations after first call.
 ///
-/// This design eliminates any overhead from repeatedly calling `default_railgun()`,
+/// This design eliminates any overhead from repeatedly calling `default_railgun()`,.
 /// making it suitable for use in hot paths and benchmarks.
 var default_railgun_instance: ?RayonRailgun = null;
 
@@ -59,14 +59,12 @@ pub fn defaultRailgun() *const RayonRailgun {
     return &default_railgun_instance.?;
 }
 
-/// Create a custom Rayon-based parallelization backend
+/// Create a custom Rayon-based parallelization backend.
 pub fn rayonRailgun(config: ParallelConfig) RayonRailgun {
     return RayonRailgun.withCustomConfig(config);
 }
 
-// ============================================================================
 // TESTS
-// ============================================================================
 
 test "par map" {
     const railgun = defaultRailgun();

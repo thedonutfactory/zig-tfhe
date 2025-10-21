@@ -7,42 +7,42 @@
 const std = @import("std");
 const ParallelConfig = @import("../parallel.zig").ParallelConfig;
 
-/// Simple parallelization backend
+/// Simple parallelization backend.
 ///
-/// This implementation uses Zig's built-in threading for
+/// This implementation uses Zig's built-in threading for.
 /// efficient CPU parallelization.
 pub const RayonRailgun = struct {
     const Self = @This();
 
     config: ParallelConfig,
 
-    /// Create a new parallel backend with default configuration
+    /// Create a new parallel backend with default configuration.
     pub fn new() Self {
         return Self{
             .config = ParallelConfig.default(),
         };
     }
 
-    /// Create a new parallel backend with custom configuration
+    /// Create a new parallel backend with custom configuration.
     pub fn withCustomConfig(config: ParallelConfig) Self {
         return Self{ .config = config };
     }
 
-    /// Create a default instance
+    /// Create a default instance.
     pub fn default() Self {
         return Self.new();
     }
 
-    /// Parallel map over a slice with a function
+    /// Parallel map over a slice with a function.
     ///
-    /// # Arguments
-    /// * `T` - Input type
-    /// * `U` - Output type
-    /// * `input` - Input slice to process
-    /// * `f` - Function to apply to each element
+    /// # Arguments.
+    /// * `T` - Input type.
+    /// * `U` - Output type.
+    /// * `input` - Input slice to process.
+    /// * `f` - Function to apply to each element.
     ///
-    /// # Returns
-    /// Vector of results
+    /// # Returns.
+    /// Vector of results.
     pub fn parMap(self: *const Self, comptime T: type, comptime U: type, input: []const T, f: *const fn (*const T) U) []U {
         _ = self; // Suppress unused parameter warning
 
@@ -57,13 +57,13 @@ pub const RayonRailgun = struct {
         return result;
     }
 
-    /// Parallel map over a slice with indexed function
+    /// Parallel map over a slice with indexed function.
     ///
-    /// # Arguments
-    /// * `T` - Input type
-    /// * `U` - Output type
-    /// * `input` - Input slice to process
-    /// * `f` - Function that takes (index, element) and returns result
+    /// # Arguments.
+    /// * `T` - Input type.
+    /// * `U` - Output type.
+    /// * `input` - Input slice to process.
+    /// * `f` - Function that takes (index, element) and returns result.
     pub fn parMapIndexed(self: *const Self, comptime T: type, comptime U: type, input: []const T, f: *const fn (usize, *const T) U) []U {
         _ = self; // Suppress unused parameter warning
 
@@ -78,17 +78,17 @@ pub const RayonRailgun = struct {
         return result;
     }
 
-    /// Execute a closure with a custom parallel configuration
+    /// Execute a closure with a custom parallel configuration.
     ///
-    /// This allows operations that need specific thread pool settings
+    /// This allows operations that need specific thread pool settings.
     /// (e.g., larger stack sizes for deep recursion).
     ///
-    /// # Arguments
-    /// * `config` - Parallel configuration
-    /// * `f` - Function to execute
+    /// # Arguments.
+    /// * `config` - Parallel configuration.
+    /// * `f` - Function to execute.
     ///
-    /// # Returns
-    /// Result of the function
+    /// # Returns.
+    /// Result of the function.
     pub fn withConfig(self: *const Self, config: ParallelConfig, f: anytype) @TypeOf(f()) {
         _ = self; // Suppress unused parameter warning
         _ = config; // Suppress unused parameter warning
@@ -99,9 +99,7 @@ pub const RayonRailgun = struct {
     }
 };
 
-// ============================================================================
 // TESTS
-// ============================================================================
 
 test "rayon par map" {
     const railgun = RayonRailgun.new();

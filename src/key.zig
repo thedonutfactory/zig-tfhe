@@ -1,4 +1,4 @@
-//! Key generation and management for TFHE
+//! Key generation and management for TFHE.
 //!
 //! This module provides functionality for generating secret keys, cloud keys,
 //! and other cryptographic keys needed for TFHE operations.
@@ -9,39 +9,35 @@ const utils = @import("utils.zig");
 const tlwe = @import("tlwe.zig");
 const fft = @import("fft.zig");
 
-// Import TRLWE module
 const trlwe = @import("trlwe.zig");
-
-// Type alias for TRLWELv1
-pub const TRLWELv1 = trlwe.TRLWELv1;
-
-// Import TRGSW module
 const trgsw = @import("trgsw.zig");
 
-// Type alias for TRGSWLv1FFT
+/// Type alias for TRLWELv1.
+pub const TRLWELv1 = trlwe.TRLWELv1;
+
+/// Type alias for TRGSWLv1FFT.
 pub const TRGSWLv1FFT = trgsw.TRGSWLv1FFT;
 
-// ============================================================================
-// TYPE DEFINITIONS
-// ============================================================================
-
+/// Secret key for TLWE Level 0.
 pub const SecretKeyLv0 = [params.implementation.tlwe_lv0.N]params.Torus;
+
+/// Secret key for TLWE Level 1.
 pub const SecretKeyLv1 = [params.implementation.tlwe_lv1.N]params.Torus;
+
+/// Key switching key for level conversion.
 pub const KeySwitchingKey = std.ArrayListUnmanaged(tlwe.TLWELv0);
+
+/// Bootstrapping key for noise refreshing.
 pub const BootstrappingKey = std.ArrayListUnmanaged(TRGSWLv1FFT);
 
-// ============================================================================
-// SECRET KEY STRUCTURE
-// ============================================================================
-
-/// Secret key containing both level 0 and level 1 keys
+/// Secret key containing both level 0 and level 1 keys.
 pub const SecretKey = struct {
     key_lv0: SecretKeyLv0,
     key_lv1: SecretKeyLv1,
 
     const Self = @This();
 
-    /// Create a new secret key with random values
+    /// Create a new secret key with random values.
     pub fn new() SecretKey {
         var rng = std.Random.DefaultPrng.init(utils.getUniqueSeed());
         var key = SecretKey{
@@ -61,11 +57,7 @@ pub const SecretKey = struct {
     }
 };
 
-// ============================================================================
-// CLOUD KEY STRUCTURE
-// ============================================================================
-
-/// Cloud key containing all public parameters needed for homomorphic operations
+/// Cloud key containing all public parameters needed for homomorphic operations.
 pub const CloudKey = struct {
     decomposition_offset: params.Torus,
     blind_rotate_testvec: TRLWELv1,
@@ -74,7 +66,7 @@ pub const CloudKey = struct {
 
     const Self = @This();
 
-    /// Create a new cloud key from a secret key
+    /// Create a new cloud key from a secret key.
     pub fn new(allocator: std.mem.Allocator, secret_key: *const SecretKey) !CloudKey {
         return CloudKey{
             .decomposition_offset = genDecompositionOffset(),
@@ -84,7 +76,7 @@ pub const CloudKey = struct {
         };
     }
 
-    /// Create a new cloud key without key switching key (for testing)
+    /// Create a new cloud key without key switching key (for testing).
     pub fn newNoKsk(allocator: std.mem.Allocator) !CloudKey {
         const TRGSWLV1_N = params.implementation.trgsw_lv1.N;
         const TRGSWLV1_IKS_T = params.implementation.trgsw_lv1.IKS_T;
@@ -107,7 +99,7 @@ pub const CloudKey = struct {
         };
     }
 
-    /// Deinitialize the cloud key and free all resources
+    /// Deinitialize the cloud key and free all resources.
     pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
         _ = self.blind_rotate_testvec; // TRLWELv1 doesn't need deinit
 
@@ -125,11 +117,7 @@ pub const CloudKey = struct {
     }
 };
 
-// ============================================================================
-// KEY GENERATION FUNCTIONS
-// ============================================================================
-
-/// Generate decomposition offset for gadget decomposition
+/// Generate decomposition offset for gadget decomposition.
 pub fn genDecompositionOffset() params.Torus {
     var offset: params.Torus = 0;
 
@@ -142,7 +130,7 @@ pub fn genDecompositionOffset() params.Torus {
     return offset;
 }
 
-/// Generate test vector for blind rotation
+/// Generate test vector for blind rotation.
 pub fn genTestvec(allocator: std.mem.Allocator) !TRLWELv1 {
     _ = allocator; // TRLWELv1 doesn't need allocator
     var testvec = TRLWELv1.new();
@@ -156,7 +144,7 @@ pub fn genTestvec(allocator: std.mem.Allocator) !TRLWELv1 {
     return testvec;
 }
 
-/// Generate key switching key
+/// Generate key switching key.
 pub fn genKeySwitchingKey(allocator: std.mem.Allocator, secret_key: *const SecretKey) !KeySwitchingKey {
     const BASEBIT = params.implementation.trgsw_lv1.BASEBIT;
     const IKS_T = params.implementation.trgsw_lv1.IKS_T;
@@ -183,14 +171,14 @@ pub fn genKeySwitchingKey(allocator: std.mem.Allocator, secret_key: *const Secre
     return res;
 }
 
-/// Generate bootstrapping key
+/// Generate bootstrapping key.
 pub fn genBootstrappingKey(allocator: std.mem.Allocator, secret_key: *const SecretKey) !BootstrappingKey {
     // For now, use a simple sequential implementation
     // TODO: Implement parallel version when parallel module is available
     return genBootstrappingKeyWithRailgun(allocator, secret_key, null);
 }
 
-/// Generate bootstrapping key with railgun (parallel processing)
+/// Generate bootstrapping key with railgun (parallel processing).
 pub fn genBootstrappingKeyWithRailgun(
     allocator: std.mem.Allocator,
     secret_key: *const SecretKey,
@@ -222,10 +210,6 @@ pub fn genBootstrappingKeyWithRailgun(
 
     return bootstrapping_key;
 }
-
-// ============================================================================
-// TESTS
-// ============================================================================
 
 test "secret key generation" {
     const key = SecretKey.new();

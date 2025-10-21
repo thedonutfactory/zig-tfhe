@@ -1,4 +1,4 @@
-//! Bit manipulation utilities for TFHE
+//! Bit manipulation utilities for TFHE.
 //!
 //! This module provides utilities for converting between different bit representations
 //! and handling bit-level operations needed for TFHE operations.
@@ -7,17 +7,12 @@ const std = @import("std");
 const params = @import("params.zig");
 const utils = @import("utils.zig");
 
-// Import key module for SecretKey type
 const key = @import("key.zig");
 
-// Type alias for SecretKey
+/// Type alias for SecretKey.
 pub const SecretKey = key.SecretKey;
 
-// ============================================================================
-// BIT CONVERSION FUNCTIONS
-// ============================================================================
-
-/// Convert a vector of bits to a number
+/// Convert a vector of bits to a number.
 pub fn convert(comptime T: type, bits: []const bool) T {
     var result: T = 0;
     for (bits, 0..) |bit, i| {
@@ -27,31 +22,22 @@ pub fn convert(comptime T: type, bits: []const bool) T {
     return result;
 }
 
-// ============================================================================
-// ENCRYPTION HELPERS
-// ============================================================================
-
-/// Encrypt a boolean value
+/// Encrypt a boolean value.
 fn encryptBool(allocator: std.mem.Allocator, a: bool, secret_key: *const SecretKey) !utils.Ciphertext {
-    // This is a placeholder - will be properly implemented when we have the full key and tlwe modules
     _ = allocator;
     return utils.Ciphertext.encryptBool(a, params.implementation.tlwe_lv0.ALPHA, &secret_key.key_lv0);
 }
 
-// ============================================================================
-// BIT REPRESENTATION TRAITS
-// ============================================================================
-
-/// Trait for types that can be represented as bits
+/// Trait for types that can be represented as bits.
 pub fn AsBits(comptime T: type) type {
     return struct {
-        /// Represent the bits of the type as an array of boolean values (bits).
+        /// Represent the bits of the type as an array of boolean values.
         /// Array is in little-endian order, where LSB is the first value of the array.
         pub fn toBits(self: T, allocator: std.mem.Allocator) ![]bool {
             return toBitsImpl(allocator, @as(usize, @intCast(self)), @sizeOf(T) * 8);
         }
 
-        /// Encrypt the bits of the type as an array of Ciphertext values (cipherbits).
+        /// Encrypt the bits of the type as an array of Ciphertext values.
         pub fn encrypt(self: T, allocator: std.mem.Allocator, secret_key: *const SecretKey) ![]utils.Ciphertext {
             const bits = try self.toBits(allocator);
             defer allocator.free(bits);
@@ -65,7 +51,7 @@ pub fn AsBits(comptime T: type) type {
     };
 }
 
-/// Internal implementation of toBits to avoid self-reference
+/// Internal implementation of toBits to avoid self-reference.
 fn toBitsImpl(allocator: std.mem.Allocator, val: usize, size: usize) ![]bool {
     var result = try allocator.alloc(bool, size);
 
@@ -77,25 +63,17 @@ fn toBitsImpl(allocator: std.mem.Allocator, val: usize, size: usize) ![]bool {
     return result;
 }
 
-// ============================================================================
-// TYPE-SPECIFIC IMPLEMENTATIONS
-// ============================================================================
-
-/// Implementation for u8
+/// Implementation for u8.
 pub const U8AsBits = AsBits(u8);
 
-/// Implementation for u16
+/// Implementation for u16.
 pub const U16AsBits = AsBits(u16);
 
-/// Implementation for u32
+/// Implementation for u32.
 pub const U32AsBits = AsBits(u32);
 
-/// Implementation for u64
+/// Implementation for u64.
 pub const U64AsBits = AsBits(u64);
-
-// ============================================================================
-// TESTS
-// ============================================================================
 
 test "convert bits to number" {
     const allocator = std.testing.allocator;

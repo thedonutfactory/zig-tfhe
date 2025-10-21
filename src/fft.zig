@@ -30,9 +30,7 @@
 const std = @import("std");
 const params = @import("params.zig");
 
-// ============================================================================
 // COMPLEX NUMBER OPERATIONS
-// ============================================================================
 
 pub const Complex = struct {
     re: f64,
@@ -66,20 +64,18 @@ pub const Complex = struct {
     }
 };
 
-// ============================================================================
 // KLEMSA FFT PROCESSOR
-// ============================================================================
 
-/// Extended FFT Processor - Hybrid High-Performance Implementation
+/// Extended FFT Processor - Hybrid High-Performance Implementation.
 ///
-/// Based on: "Fast and Error-Free Negacyclic Integer Convolution using Extended Fourier Transform"
-/// by Jakub Klemsa - https://eprint.iacr.org/2021/480
+/// Based on: "Fast and Error-Free Negacyclic Integer Convolution using Extended Fourier Transform".
+/// by Jakub Klemsa - https://eprint.iacr.org/2021/480.
 ///
-/// **Algorithm:**
-/// 1. Split N=1024 polynomial into two N/2=512 halves
-/// 2. Apply twisting factors (2N-th roots of unity) + convert
-/// 3. Custom 512-point FFT implementation
-/// 4. Scale and convert output
+/// **Algorithm:**.
+/// 1. Split N=1024 polynomial into two N/2=512 halves.
+/// 2. Apply twisting factors (2N-th roots of unity) + convert.
+/// 3. Custom 512-point FFT implementation.
+/// 4. Scale and convert output.
 pub const KlemsaProcessor = struct {
     allocator: std.mem.Allocator,
     n: usize,
@@ -140,9 +136,9 @@ pub const KlemsaProcessor = struct {
         self.allocator.free(self.scratch_inv);
     }
 
-    /// Generic forward FFT for any power-of-2 size N
-    /// Input: N torus32 values representing polynomial coefficients
-    /// Output: N f64 values (N/2 complex stored as [re_0..re_N/2-1, im_0..im_N/2-1])
+    /// Generic forward FFT for any power-of-2 size N.
+    /// Input: N torus32 values representing polynomial coefficients.
+    /// Output: N f64 values (N/2 complex stored as [re_0..re_N/2-1, im_0..im_N/2-1]).
     pub fn ifft(self: *Self, input: []const params.Torus) ![]f64 {
         const n2 = self.n / 2;
         std.debug.assert(input.len == self.n);
@@ -173,9 +169,9 @@ pub const KlemsaProcessor = struct {
         return result;
     }
 
-    /// Generic inverse FFT for any power-of-2 size N
-    /// Input: N f64 values (N/2 complex stored as [re_0..re_N/2-1, im_0..im_N/2-1])
-    /// Output: N torus32 values representing polynomial coefficients
+    /// Generic inverse FFT for any power-of-2 size N.
+    /// Input: N f64 values (N/2 complex stored as [re_0..re_N/2-1, im_0..im_N/2-1]).
+    /// Output: N torus32 values representing polynomial coefficients.
     pub fn fft(self: *Self, input: []const f64) ![]params.Torus {
         const n2 = self.n / 2;
         std.debug.assert(input.len == self.n);
@@ -217,8 +213,8 @@ pub const KlemsaProcessor = struct {
         return result;
     }
 
-    /// Generic negacyclic polynomial multiplication for any power-of-2 size N
-    /// Computes: a(X) * b(X) mod (X^N+1)
+    /// Generic negacyclic polynomial multiplication for any power-of-2 size N.
+    /// Computes: a(X) * b(X) mod (X^N+1).
     pub fn poly_mul(self: *Self, a: []const params.Torus, b: []const params.Torus) ![]params.Torus {
         const a_fft = try self.ifft(a);
         defer self.allocator.free(a_fft);
@@ -242,7 +238,7 @@ pub const KlemsaProcessor = struct {
         return try self.fft(result_fft);
     }
 
-    /// Generic batch IFFT for any power-of-2 size N
+    /// Generic batch IFFT for any power-of-2 size N.
     pub fn batch_ifft(self: *Self, inputs: []const []const params.Torus) ![]([]f64) {
         var results = try self.allocator.alloc([]f64, inputs.len);
         for (0..inputs.len) |i| {
@@ -251,7 +247,7 @@ pub const KlemsaProcessor = struct {
         return results;
     }
 
-    /// Generic batch FFT for any power-of-2 size N
+    /// Generic batch FFT for any power-of-2 size N.
     pub fn batch_fft(self: *Self, inputs: []const []const f64) ![]([]params.Torus) {
         var results = try self.allocator.alloc([]params.Torus, inputs.len);
         for (0..inputs.len) |i| {
@@ -260,7 +256,7 @@ pub const KlemsaProcessor = struct {
         return results;
     }
 
-    /// Custom FFT implementation (forward and inverse) - matches rustfft behavior
+    /// Custom FFT implementation (forward and inverse) - matches rustfft behavior.
     fn fftInPlace(_: *Self, data: []Complex, _: []Complex, inverse: bool) void {
         const n = data.len;
         std.debug.assert(std.math.isPowerOfTwo(n));
@@ -304,7 +300,7 @@ pub const KlemsaProcessor = struct {
         // The inverse parameter is used above in the angle calculation
     }
 
-    /// Bit-reverse permutation for FFT
+    /// Bit-reverse permutation for FFT.
     fn bitReverse(data: []Complex) void {
         const n = data.len;
         var j: usize = 0;
@@ -326,9 +322,7 @@ pub const KlemsaProcessor = struct {
     }
 };
 
-// ============================================================================
 // FFT PLAN WRAPPER
-// ============================================================================
 
 pub const FFTPlan = struct {
     processor: KlemsaProcessor,
@@ -344,17 +338,13 @@ pub const FFTPlan = struct {
     }
 };
 
-// ============================================================================
 // DEFAULT FFT PROCESSOR
-// ============================================================================
 
 pub const DefaultFFTProcessor = KlemsaProcessor;
 
-// ============================================================================
 // TESTS
-// ============================================================================
 
-/// Helper function for naive polynomial multiplication (for comparison)
+/// Helper function for naive polynomial multiplication (for comparison).
 fn polyMul(allocator: std.mem.Allocator, a: []const params.Torus, b: []const params.Torus) ![]params.Torus {
     const n = a.len;
     var res = try allocator.alloc(params.Torus, n);
@@ -655,14 +645,12 @@ test "klemsa roundtrip" {
     try std.testing.expect(max_diff < 2);
 }
 
-// ============================================================================
 // THREAD-LOCAL FFT PLAN (similar to Rust's FFT_PLAN)
-// ============================================================================
 
-/// Thread-local FFT plan for efficient reuse (matches Rust's FFT_PLAN)
+/// Thread-local FFT plan for efficient reuse (matches Rust's FFT_PLAN).
 pub threadlocal var FFT_PLAN: ?FFTPlan = null;
 
-/// Get or create the thread-local FFT plan
+/// Get or create the thread-local FFT plan.
 pub fn getFFTPlan(allocator: std.mem.Allocator) !*FFTPlan {
     if (FFT_PLAN == null) {
         FFT_PLAN = try FFTPlan.new(allocator, params.implementation.trgsw_lv1.N);
@@ -670,7 +658,7 @@ pub fn getFFTPlan(allocator: std.mem.Allocator) !*FFTPlan {
     return &FFT_PLAN.?;
 }
 
-/// Clean up the thread-local FFT plan
+/// Clean up the thread-local FFT plan.
 pub fn cleanupFFTPlan() void {
     if (FFT_PLAN) |*plan| {
         plan.deinit();
@@ -678,7 +666,7 @@ pub fn cleanupFFTPlan() void {
     }
 }
 
-/// Clean up the thread-local FFT plan with allocator
+/// Clean up the thread-local FFT plan with allocator.
 pub fn cleanupFFTPlanWithAllocator(_: std.mem.Allocator) void {
     if (FFT_PLAN) |*plan| {
         plan.deinit();

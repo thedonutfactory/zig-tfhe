@@ -1,4 +1,4 @@
-//! TRGSW (Torus Ring Gadget Switching) implementation
+//! TRGSW (Torus Ring Gadget Switching) implementation.
 //!
 //! This module provides TRGSW encryption and operations, which are essential for
 //! bootstrapping in TFHE. TRGSW enables efficient external products and conditional
@@ -12,17 +12,13 @@ const trlwe = @import("trlwe.zig");
 const fft = @import("fft.zig");
 const key = @import("key.zig");
 
-// ============================================================================
-// TRGSW LEVEL 1 (Lv1) - Torus Ring Gadget Switching
-// ============================================================================
-
-/// TRGSW Level 1 ciphertext - gadget switching key for bootstrapping
+/// TRGSW Level 1 ciphertext used as gadget switching key for bootstrapping.
 pub const TRGSWLv1 = struct {
     trlwe: [params.implementation.trgsw_lv1.L * 2]trlwe.TRLWELv1,
 
     const Self = @This();
 
-    /// Create a new zero TRGSW ciphertext
+    /// Create a new zero TRGSW ciphertext.
     pub fn new() TRGSWLv1 {
         var result = TRGSWLv1{
             .trlwe = undefined,
@@ -35,7 +31,7 @@ pub const TRGSWLv1 = struct {
         return result;
     }
 
-    /// Encrypt a torus value using TRGSW
+    /// Encrypt a torus value using TRGSW.
     pub fn encryptTorus(
         p: params.Torus,
         alpha: f64,
@@ -75,17 +71,13 @@ pub const TRGSWLv1 = struct {
     }
 };
 
-// ============================================================================
-// TRGSW FFT REPRESENTATION
-// ============================================================================
-
-/// TRGSW Level 1 in FFT domain for efficient operations
+/// TRGSW Level 1 in FFT domain for efficient operations.
 pub const TRGSWLv1FFT = struct {
     trlwe_fft: [params.implementation.trgsw_lv1.L * 2]trlwe.TRLWELv1FFT,
 
     const Self = @This();
 
-    /// Create FFT representation from TRGSW ciphertext
+    /// Create FFT representation from TRGSW ciphertext.
     pub fn new(trgsw: *const TRGSWLv1, plan: *fft.FFTPlan) !TRGSWLv1FFT {
         var result = TRGSWLv1FFT{
             .trlwe_fft = undefined,
@@ -98,7 +90,7 @@ pub const TRGSWLv1FFT = struct {
         return result;
     }
 
-    /// Create a dummy FFT representation (all zeros)
+    /// Create a dummy FFT representation (all zeros).
     pub fn newDummy() TRGSWLv1FFT {
         var result = TRGSWLv1FFT{
             .trlwe_fft = undefined,
@@ -112,11 +104,9 @@ pub const TRGSWLv1FFT = struct {
     }
 };
 
-// ============================================================================
 // EXTERNAL PRODUCT OPERATIONS
-// ============================================================================
 
-/// External product with FFT optimization
+/// External product with FFT optimization.
 pub fn externalProductWithFft(
     trgsw_fft: *const TRGSWLv1FFT,
     trlwe_input: *const trlwe.TRLWELv1,
@@ -171,7 +161,7 @@ pub fn externalProductWithFft(
     return result;
 }
 
-/// Frequency domain multiply-accumulate for 1024-point FFT
+/// Frequency domain multiply-accumulate for 1024-point FFT.
 fn fmaInFd1024(res: []f64, a: []const f64, b: []const f64) void {
     // Complex multiply-accumulate in frequency domain: res += a * b
     // CRITICAL: 0.5 scaling required for negacyclic FFT correctness
@@ -185,7 +175,7 @@ fn fmaInFd1024(res: []f64, a: []const f64, b: []const f64) void {
     }
 }
 
-/// Decomposition function for external product
+/// Decomposition function for external product.
 pub fn decomposition(
     trlwe_input: *const trlwe.TRLWELv1,
     cloud_key: *const key.CloudKey,
@@ -220,11 +210,9 @@ pub fn decomposition(
     return res;
 }
 
-// ============================================================================
 // CONDITIONAL MULTIPLEXING (CMUX)
-// ============================================================================
 
-/// Conditional multiplexing: if cond == 0 then in1 else in2
+/// Conditional multiplexing: if cond == 0 then in1 else in2.
 pub fn cmux(
     in1: *const trlwe.TRLWELv1,
     in2: *const trlwe.TRLWELv1,
@@ -251,11 +239,9 @@ pub fn cmux(
     return result;
 }
 
-// ============================================================================
 // BLIND ROTATION
-// ============================================================================
 
-/// Blind rotation operation for bootstrapping
+/// Blind rotation operation for bootstrapping.
 pub fn blindRotate(
     src: *const tlwe.TLWELv0,
     cloud_key: *const key.CloudKey,
@@ -321,7 +307,7 @@ pub fn blindRotate(
     return result;
 }
 
-/// Blind rotation with custom test vector (for LUT bootstrapping)
+/// Blind rotation with custom test vector (for LUT bootstrapping).
 pub fn blindRotateWithTestvec(
     src: *const tlwe.TLWELv0,
     testvec: *const trlwe.TRLWELv1,
@@ -388,11 +374,9 @@ pub fn blindRotateWithTestvec(
     return result;
 }
 
-// ============================================================================
 // POLYNOMIAL OPERATIONS
-// ============================================================================
 
-/// Polynomial multiplication with x^k (rotation)
+/// Polynomial multiplication with x^k (rotation).
 pub fn polyMulWithXK(
     a: []const params.Torus,
     k: usize,
@@ -423,11 +407,9 @@ pub fn polyMulWithXK(
     return res;
 }
 
-// ============================================================================
 // KEY SWITCHING
-// ============================================================================
 
-/// Identity key switching from TLWE Lv1 to TLWE Lv0
+/// Identity key switching from TLWE Lv1 to TLWE Lv0.
 pub fn identityKeySwitching(
     src: *const tlwe.TLWELv1,
     key_switching_key: *const key.KeySwitchingKey,
@@ -461,10 +443,7 @@ pub fn identityKeySwitching(
     return res;
 }
 
-// ============================================================================
 // TESTS
-// ============================================================================
-
 test "trgsw decomposition" {
     var rng = std.Random.DefaultPrng.init(42);
     const cloud_key = try key.CloudKey.newNoKsk(std.heap.page_allocator);

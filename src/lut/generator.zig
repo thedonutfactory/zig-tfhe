@@ -8,24 +8,24 @@ const params = @import("../params.zig");
 const encoder = @import("encoder.zig");
 const lookup_table = @import("lookup_table.zig");
 
-/// Generator for creating lookup tables from functions
+/// Generator for creating lookup tables from functions.
 ///
-/// The generator creates lookup tables that encode arbitrary functions
+/// The generator creates lookup tables that encode arbitrary functions.
 /// for evaluation during programmable bootstrapping.
 pub const Generator = struct {
     const Self = @This();
 
-    /// Encoder for message space
+    /// Encoder for message space.
     encoder: encoder.Encoder,
-    /// Polynomial degree (N from TRGSW parameters)
+    /// Polynomial degree (N from TRGSW parameters).
     poly_degree: usize,
-    /// Lookup table size (equals poly_degree for standard TFHE)
+    /// Lookup table size (equals poly_degree for standard TFHE).
     lookup_table_size: usize,
 
-    /// Create a new LUT generator
+    /// Create a new LUT generator.
     ///
-    /// # Arguments
-    /// * `message_modulus` - Number of possible messages (e.g., 2 for binary)
+    /// # Arguments.
+    /// * `message_modulus` - Number of possible messages (e.g., 2 for binary).
     pub fn new(message_modulus: usize) Self {
         const poly_degree = params.implementation.trgsw_lv1.N;
         // For standard TFHE, lookup_table_size = poly_degree (poly_extend_factor = 1)
@@ -39,11 +39,11 @@ pub const Generator = struct {
         };
     }
 
-    /// Create a new LUT generator with custom scale
+    /// Create a new LUT generator with custom scale.
     ///
-    /// # Arguments
-    /// * `message_modulus` - Number of possible messages
-    /// * `scale` - Custom scaling factor for encoding
+    /// # Arguments.
+    /// * `message_modulus` - Number of possible messages.
+    /// * `scale` - Custom scaling factor for encoding.
     pub fn withScale(message_modulus: usize, scale: f64) Self {
         const poly_degree = params.implementation.trgsw_lv1.N;
         const lookup_table_size = poly_degree; // Standard: lookup_table_size = poly_degree
@@ -55,33 +55,33 @@ pub const Generator = struct {
         };
     }
 
-    /// Generate a lookup table from a function
+    /// Generate a lookup table from a function.
     ///
-    /// # Arguments
-    /// * `f` - Function to encode (maps message index to output value)
+    /// # Arguments.
+    /// * `f` - Function to encode (maps message index to output value).
     ///
-    /// # Returns
-    /// Generated lookup table
+    /// # Returns.
+    /// Generated lookup table.
     pub fn generateLookupTable(self: *const Self, f: *const fn (usize) usize) lookup_table.LookupTable {
         var lut = lookup_table.LookupTable.new();
         self.generateLookupTableAssign(f, &lut);
         return lut;
     }
 
-    /// Generate a lookup table and write to the provided output
+    /// Generate a lookup table and write to the provided output.
     ///
     /// This is the core implementation of lookup table generation.
-    /// The algorithm follows the tfhe-go reference implementation:
+    /// The algorithm follows the tfhe-go reference implementation:.
     ///
-    /// 1. Create raw LUT buffer (size = lookup_table_size)
-    /// 2. For each message x, fill range with encoded f(x)
-    /// 3. Rotate by offset
-    /// 4. Negate tail
-    /// 5. Store in polynomial
+    /// 1. Create raw LUT buffer (size = lookup_table_size).
+    /// 2. For each message x, fill range with encoded f(x).
+    /// 3. Rotate by offset.
+    /// 4. Negate tail.
+    /// 5. Store in polynomial.
     ///
-    /// # Arguments
-    /// * `f` - Function to encode
-    /// * `lut_out` - Output lookup table to write to
+    /// # Arguments.
+    /// * `f` - Function to encode.
+    /// * `lut_out` - Output lookup table to write to.
     pub fn generateLookupTableAssign(self: *const Self, f: *const fn (usize) usize, lut_out: *lookup_table.LookupTable) void {
         const message_modulus = self.encoder.message_modulus;
 
@@ -134,24 +134,24 @@ pub const Generator = struct {
         }
     }
 
-    /// Generate a lookup table from a function that returns Torus values
+    /// Generate a lookup table from a function that returns Torus values.
     ///
-    /// # Arguments
-    /// * `f` - Function that maps message index to Torus output value
+    /// # Arguments.
+    /// * `f` - Function that maps message index to Torus output value.
     ///
-    /// # Returns
-    /// Generated lookup table
+    /// # Returns.
+    /// Generated lookup table.
     pub fn generateLookupTableFull(self: *const Self, f: *const fn (usize) params.Torus) lookup_table.LookupTable {
         var lut = lookup_table.LookupTable.new();
         self.generateLookupTableFullAssign(f, &lut);
         return lut;
     }
 
-    /// Generate a lookup table with full control over Torus values
+    /// Generate a lookup table with full control over Torus values.
     ///
-    /// # Arguments
-    /// * `f` - Function that maps message index to Torus output value
-    /// * `lut_out` - Output lookup table to write to
+    /// # Arguments.
+    /// * `f` - Function that maps message index to Torus output value.
+    /// * `lut_out` - Output lookup table to write to.
     pub fn generateLookupTableFullAssign(self: *const Self, f: *const fn (usize) params.Torus, lut_out: *lookup_table.LookupTable) void {
         const message_modulus = self.encoder.message_modulus;
 
@@ -190,15 +190,15 @@ pub const Generator = struct {
         }
     }
 
-    /// Generate a lookup table with custom message modulus and scale
+    /// Generate a lookup table with custom message modulus and scale.
     ///
-    /// # Arguments
-    /// * `f` - Function to encode
-    /// * `message_modulus` - Custom message modulus
-    /// * `scale` - Custom scale factor
+    /// # Arguments.
+    /// * `f` - Function to encode.
+    /// * `message_modulus` - Custom message modulus.
+    /// * `scale` - Custom scale factor.
     ///
-    /// # Returns
-    /// Generated lookup table
+    /// # Returns.
+    /// Generated lookup table.
     pub fn generateLookupTableCustom(self: *const Self, f: *const fn (usize) usize, message_modulus: usize, scale: f64) lookup_table.LookupTable {
         var lut = lookup_table.LookupTable.new();
 
@@ -211,52 +211,50 @@ pub const Generator = struct {
         return lut;
     }
 
-    /// Switch the modulus of x from Torus (2^32) to lookup_table_size
+    /// Switch the modulus of x from Torus (2^32) to lookup_table_size.
     ///
-    /// For standard TFHE with lookup_table_size=N: result in [0, N)
+    /// For standard TFHE with lookup_table_size=N: result in [0, N).
     ///
-    /// # Arguments
-    /// * `x` - Torus value to convert
+    /// # Arguments.
+    /// * `x` - Torus value to convert.
     ///
-    /// # Returns
-    /// Converted value in [0, lookup_table_size)
+    /// # Returns.
+    /// Converted value in [0, lookup_table_size).
     pub fn modSwitch(self: *const Self, x: params.Torus) usize {
         const scaled = (@as(f64, @floatFromInt(x)) / @as(f64, @floatFromInt(std.math.maxInt(u32)))) * @as(f64, @floatFromInt(self.lookup_table_size));
         const result = @as(usize, @intFromFloat(scaled + 0.5)) % self.lookup_table_size;
         return result;
     }
 
-    /// Get the message modulus
+    /// Get the message modulus.
     pub fn messageModulus(self: *const Self) usize {
         return self.encoder.message_modulus;
     }
 
-    /// Get the polynomial degree
+    /// Get the polynomial degree.
     pub fn polyDegree(self: *const Self) usize {
         return self.poly_degree;
     }
 
-    /// Get the lookup table size
+    /// Get the lookup table size.
     pub fn lookupTableSize(self: *const Self) usize {
         return self.lookup_table_size;
     }
 };
 
-/// Perform integer division with rounding
+/// Perform integer division with rounding.
 ///
-/// # Arguments
-/// * `a` - Dividend
-/// * `b` - Divisor
+/// # Arguments.
+/// * `a` - Dividend.
+/// * `b` - Divisor.
 ///
-/// # Returns
-/// Rounded result of a / b
+/// # Returns.
+/// Rounded result of a / b.
 fn divRound(a: usize, b: usize) usize {
     return (a + b / 2) / b;
 }
 
-// ============================================================================
 // TESTS
-// ============================================================================
 
 test "generator creation" {
     const generator = Generator.new(2);

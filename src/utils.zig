@@ -1,4 +1,4 @@
-//! Utility functions for TFHE operations
+//! Utility functions for TFHE operations.
 //!
 //! This module provides utility functions for converting between different
 //! representations, generating noise, and other common operations used
@@ -6,44 +6,36 @@
 
 const std = @import("std");
 const params = @import("params.zig");
+const tlwe = @import("tlwe.zig");
 
-/// Global atomic counter for generating unique seeds
-var global_seed_counter = std.atomic.Value(u64).init(0);
+/// Global atomic counter for generating unique seeds.
+var global_seed_counter = std.atomic.Value(u64).init(1);
 
-/// Generate a unique random seed for RNG initialization
-/// Uses atomic counter, timestamp, and stack address for maximum uniqueness
+/// Generate a unique random seed for RNG initialization.
+/// Uses atomic counter, timestamp, and stack address for maximum uniqueness.
 pub fn getUniqueSeed() u64 {
     const counter = global_seed_counter.fetchAdd(1, .monotonic);
     const timestamp = @as(u64, @intCast(std.time.nanoTimestamp()));
-    // Mix in the address of a stack variable for additional entropy
     var stack_var: u8 = 0;
     const addr = @intFromPtr(&stack_var);
-    // Combine all three sources with XOR and bit rotation
     return (counter ^ timestamp) +% addr;
 }
 
-// Import TLWE module for Ciphertext type
-const tlwe = @import("tlwe.zig");
-
-// Type alias for Ciphertext (TLWE Level 0)
+/// Type alias for Ciphertext (TLWE Level 0).
 pub const Ciphertext = tlwe.TLWELv0;
 
-// ============================================================================
-// TORUS CONVERSION FUNCTIONS
-// ============================================================================
-
-/// Convert a floating-point number to torus representation
+/// Convert a floating-point number to torus representation.
 pub fn f64ToTorus(d: f64) params.Torus {
     const torus = (@mod(d, 1.0)) * @as(f64, @floatFromInt(std.math.pow(u64, 2, params.TORUS_SIZE)));
     return @as(params.Torus, @intFromFloat(torus));
 }
 
-/// Convert a torus value to floating-point representation
+/// Convert a torus value to floating-point representation.
 pub fn torusToF64(t: params.Torus) f64 {
     return @as(f64, @floatFromInt(t)) / @as(f64, @floatFromInt(std.math.pow(u64, 2, params.TORUS_SIZE)));
 }
 
-/// Convert a vector of floating-point numbers to torus representation
+/// Convert a vector of floating-point numbers to torus representation.
 pub fn f64ToTorusVec(allocator: std.mem.Allocator, d: []const f64) ![]params.Torus {
     var result = try allocator.alloc(params.Torus, d.len);
     for (d, 0..) |val, i| {
@@ -52,11 +44,7 @@ pub fn f64ToTorusVec(allocator: std.mem.Allocator, d: []const f64) ![]params.Tor
     return result;
 }
 
-// ============================================================================
-// GAUSSIAN NOISE GENERATION
-// ============================================================================
-
-/// Simple normal distribution using Box-Muller transform
+/// Simple normal distribution using Box-Muller transform.
 pub const NormalDist = struct {
     mean: f64,
     stddev: f64,
@@ -91,7 +79,7 @@ pub const NormalDist = struct {
     }
 };
 
-/// Generate gaussian noise in torus representation
+/// Generate gaussian noise in torus representation.
 pub fn gaussianTorus(
     mu: params.Torus,
     normal_distr: *NormalDist,
@@ -101,7 +89,7 @@ pub fn gaussianTorus(
     return f64ToTorus(sample) +% mu;
 }
 
-/// Generate gaussian noise from floating-point mean
+/// Generate gaussian noise from floating-point mean.
 pub fn gaussianF64(
     mu: f64,
     normal_distr: *NormalDist,
@@ -111,7 +99,7 @@ pub fn gaussianF64(
     return gaussianTorus(mu_torus, normal_distr, rng);
 }
 
-/// Generate gaussian noise for a vector of floating-point means
+/// Generate gaussian noise for a vector of floating-point means.
 pub fn gaussianF64Vec(
     allocator: std.mem.Allocator,
     mu: []const f64,
@@ -125,7 +113,7 @@ pub fn gaussianF64Vec(
     return result;
 }
 
-/// Generate gaussian noise for a vector of torus means
+/// Generate gaussian noise for a vector of torus means.
 pub fn gaussianTorusVec(
     allocator: std.mem.Allocator,
     mu: []const params.Torus,
@@ -138,10 +126,6 @@ pub fn gaussianTorusVec(
     }
     return result;
 }
-
-// ============================================================================
-// TESTS
-// ============================================================================
 
 test "gaussian 32bit" {
     const allocator = std.testing.allocator;

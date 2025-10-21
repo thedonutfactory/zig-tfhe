@@ -1,4 +1,4 @@
-//! TLWE (Torus Learning With Errors) implementation
+//! TLWE (Torus Learning With Errors) implementation.
 //!
 //! This module provides the core TLWE encryption scheme used in TFHE.
 //! TLWE is the basic building block for all other TFHE operations.
@@ -7,34 +7,30 @@ const std = @import("std");
 const params = @import("params.zig");
 const utils = @import("utils.zig");
 
-// ============================================================================
-// TLWE LEVEL 0 (Lv0) - Basic TLWE with smaller parameters
-// ============================================================================
-
-/// TLWE Level 0 ciphertext - used for basic operations
+/// TLWE Level 0 ciphertext used for basic operations.
 pub const TLWELv0 = struct {
     p: [params.implementation.tlwe_lv0.N + 1]params.Torus,
 
     const Self = @This();
 
-    /// Create a new zero TLWE ciphertext
+    /// Create a new zero TLWE ciphertext.
     pub fn new() TLWELv0 {
         return TLWELv0{
             .p = [_]params.Torus{0} ** (params.implementation.tlwe_lv0.N + 1),
         };
     }
 
-    /// Get the b component (last element)
+    /// Get the b component (last element).
     pub fn b(self: *const Self) params.Torus {
         return self.p[params.implementation.tlwe_lv0.N];
     }
 
-    /// Get mutable reference to the b component
+    /// Get mutable reference to the b component.
     pub fn bMut(self: *Self) *params.Torus {
         return &self.p[params.implementation.tlwe_lv0.N];
     }
 
-    /// Encrypt a floating-point value
+    /// Encrypt a floating-point value.
     pub fn encryptF64(p: f64, alpha: f64, key: []const params.Torus) !TLWELv0 {
         var rng = std.Random.DefaultPrng.init(utils.getUniqueSeed());
         var tlwe = TLWELv0.new();
@@ -52,13 +48,13 @@ pub const TLWELv0 = struct {
         return tlwe;
     }
 
-    /// Encrypt a boolean value
+    /// Encrypt a boolean value.
     pub fn encryptBool(p_bool: bool, alpha: f64, key: []const params.Torus) !TLWELv0 {
         const p: f64 = if (p_bool) 0.125 else -0.125;
         return Self.encryptF64(p, alpha, key);
     }
 
-    /// Decrypt a boolean value
+    /// Decrypt a boolean value.
     pub fn decryptBool(self: *const Self, key: []const params.Torus) bool {
         var inner_product: params.Torus = 0;
         for (key, 0..) |key_val, i| {
@@ -71,19 +67,10 @@ pub const TLWELv0 = struct {
         return res_torus >= 0;
     }
 
-    /// Encrypt a message using LWE message encoding for programmable bootstrapping
-    ///
+    /// Encrypt a message using LWE message encoding for programmable bootstrapping.
     /// This function encodes a message as `message * scale` where scale is `1/(2*message_modulus)`.
-    /// This is the standard encoding used in programmable bootstrapping.
-    ///
-    /// # Arguments
-    /// * `message` - Integer message to encrypt (should be in [0, message_modulus))
-    /// * `message_modulus` - Size of the message space
-    /// * `alpha` - Noise parameter
-    /// * `key` - Secret key for encryption
-    ///
-    /// # Returns
-    /// Encrypted TLWE ciphertext
+    /// This is the standard encoding used in programmable bootstrapping. The message should be in.
+    /// the range [0, message_modulus).
     pub fn encryptLweMessage(
         message: usize,
         message_modulus: usize,
@@ -100,16 +87,16 @@ pub const TLWELv0 = struct {
         return Self.encryptF64(encoded_value, alpha, key);
     }
 
-    /// Decrypt a message using LWE message decoding for programmable bootstrapping
+    /// Decrypt a message using LWE message decoding for programmable bootstrapping.
     ///
     /// This function decodes a message from the LWE message encoding used in programmable bootstrapping.
     ///
-    /// # Arguments
-    /// * `message_modulus` - Size of the message space
-    /// * `key` - Secret key for decryption
+    /// # Arguments.
+    /// * `message_modulus` - Size of the message space.
+    /// * `key` - Secret key for decryption.
     ///
-    /// # Returns
-    /// Decrypted integer message
+    /// # Returns.
+    /// Decrypted integer message.
     pub fn decryptLweMessage(self: *const Self, message_modulus: usize, key: []const params.Torus) usize {
         var inner_product: params.Torus = 0;
         for (key, 0..) |key_val, i| {
@@ -129,7 +116,7 @@ pub const TLWELv0 = struct {
         return message % message_modulus;
     }
 
-    /// Add two TLWE ciphertexts
+    /// Add two TLWE ciphertexts.
     pub fn add(self: *const Self, other: *const Self) TLWELv0 {
         var res = TLWELv0.new();
         for (0..self.p.len) |i| {
@@ -138,7 +125,7 @@ pub const TLWELv0 = struct {
         return res;
     }
 
-    /// Subtract two TLWE ciphertexts
+    /// Subtract two TLWE ciphertexts.
     pub fn sub(self: *const Self, other: *const Self) TLWELv0 {
         var res = TLWELv0.new();
         for (0..self.p.len) |i| {
@@ -147,7 +134,7 @@ pub const TLWELv0 = struct {
         return res;
     }
 
-    /// Negate a TLWE ciphertext
+    /// Negate a TLWE ciphertext.
     pub fn neg(self: *const Self) TLWELv0 {
         var res = TLWELv0.new();
         for (0..self.p.len) |i| {
@@ -156,7 +143,7 @@ pub const TLWELv0 = struct {
         return res;
     }
 
-    /// Multiply two TLWE ciphertexts (element-wise)
+    /// Multiply two TLWE ciphertexts (element-wise).
     pub fn mul(self: *const Self, other: *const Self) TLWELv0 {
         var res = TLWELv0.new();
         for (0..self.p.len) |i| {
@@ -165,7 +152,7 @@ pub const TLWELv0 = struct {
         return res;
     }
 
-    /// Add-multiply operation: self + other * multiplier
+    /// Add-multiply operation: self + other * multiplier.
     pub fn addMul(self: *const Self, other: *const Self, multiplier: params.Torus) TLWELv0 {
         var res = TLWELv0.new();
         for (0..self.p.len) |i| {
@@ -174,7 +161,7 @@ pub const TLWELv0 = struct {
         return res;
     }
 
-    /// Subtract-multiply operation: self - other * multiplier
+    /// Subtract-multiply operation: self - other * multiplier.
     pub fn subMul(self: *const Self, other: *const Self, multiplier: params.Torus) TLWELv0 {
         var res = TLWELv0.new();
         for (0..self.p.len) |i| {
@@ -184,29 +171,25 @@ pub const TLWELv0 = struct {
     }
 };
 
-// ============================================================================
-// TLWE LEVEL 1 (Lv1) - Higher security TLWE with larger parameters
-// ============================================================================
-
-/// TLWE Level 1 ciphertext - used for higher security operations
+/// TLWE Level 1 ciphertext used for higher security operations.
 pub const TLWELv1 = struct {
     p: [params.implementation.tlwe_lv1.N + 1]params.Torus,
 
     const Self = @This();
 
-    /// Create a new zero TLWE ciphertext
+    /// Create a new zero TLWE ciphertext.
     pub fn new() TLWELv1 {
         return TLWELv1{
             .p = [_]params.Torus{0} ** (params.implementation.tlwe_lv1.N + 1),
         };
     }
 
-    /// Get mutable reference to the b component
+    /// Get mutable reference to the b component.
     pub fn bMut(self: *Self) *params.Torus {
         return &self.p[params.implementation.tlwe_lv1.N];
     }
 
-    /// Encrypt a floating-point value (for testing)
+    /// Encrypt a floating-point value (for testing).
     pub fn encryptF64(p: f64, alpha: f64, key: []const params.Torus) !TLWELv1 {
         var rng = std.Random.DefaultPrng.init(utils.getUniqueSeed());
         var tlwe = TLWELv1.new();
@@ -224,13 +207,13 @@ pub const TLWELv1 = struct {
         return tlwe;
     }
 
-    /// Encrypt a boolean value (for testing)
+    /// Encrypt a boolean value (for testing).
     pub fn encryptBool(b: bool, alpha: f64, key: []const params.Torus) !TLWELv1 {
         const p: f64 = if (b) 0.125 else -0.125;
         return Self.encryptF64(p, alpha, key);
     }
 
-    /// Decrypt a boolean value (for testing)
+    /// Decrypt a boolean value (for testing).
     pub fn decryptBool(self: *const Self, key: []const params.Torus) bool {
         var inner_product: params.Torus = 0;
         for (key, 0..) |key_val, i| {
@@ -244,9 +227,7 @@ pub const TLWELv1 = struct {
     }
 };
 
-// ============================================================================
 // TESTS
-// ============================================================================
 
 test "tlwe encryption and decryption" {
     var rng = std.Random.DefaultPrng.init(42);

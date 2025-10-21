@@ -54,9 +54,7 @@ pub const Encoder = encoder.Encoder;
 pub const Generator = generator.Generator;
 pub const LookupTable = lookup_table.LookupTable;
 
-// ============================================================================
 // TESTS
-// ============================================================================
 
 test "lut module imports" {
     _ = encoder;

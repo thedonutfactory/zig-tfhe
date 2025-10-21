@@ -1,4 +1,4 @@
-//! TRLWE (Ring Learning With Errors over the Torus) implementation
+//! TRLWE (Ring Learning With Errors over the Torus) implementation.
 //!
 //! This module provides TRLWE encryption, which is a ring-based variant of LWE
 //! that operates over polynomial rings. TRLWE is essential for efficient
@@ -11,18 +11,14 @@ const tlwe = @import("tlwe.zig");
 const fft = @import("fft.zig");
 const key = @import("key.zig");
 
-// ============================================================================
-// TRLWE LEVEL 1 (Lv1) - Ring LWE over the torus
-// ============================================================================
-
-/// TRLWE Level 1 ciphertext - ring-based LWE with polynomial coefficients
+/// TRLWE Level 1 ciphertext with ring-based LWE polynomial coefficients.
 pub const TRLWELv1 = struct {
     a: [params.implementation.trlwe_lv1.N]params.Torus,
     b: [params.implementation.trlwe_lv1.N]params.Torus,
 
     const Self = @This();
 
-    /// Create a new zero TRLWE ciphertext
+    /// Create a new zero TRLWE ciphertext.
     pub fn new() TRLWELv1 {
         return TRLWELv1{
             .a = [_]params.Torus{0} ** params.implementation.trlwe_lv1.N,
@@ -30,7 +26,7 @@ pub const TRLWELv1 = struct {
         };
     }
 
-    /// Encrypt a vector of floating-point values
+    /// Encrypt a vector of floating-point values.
     pub fn encryptF64(
         p: []const f64,
         alpha: f64,
@@ -66,7 +62,7 @@ pub const TRLWELv1 = struct {
         return trlwe;
     }
 
-    /// Encrypt a vector of boolean values
+    /// Encrypt a vector of boolean values.
     pub fn encryptBool(
         p_bool: []const bool,
         alpha: f64,
@@ -84,7 +80,7 @@ pub const TRLWELv1 = struct {
         return Self.encryptF64(p_f64, alpha, secret_key, plan);
     }
 
-    /// Decrypt a vector of boolean values
+    /// Decrypt a vector of boolean values.
     pub fn decryptBool(self: *const Self, secret_key: []const params.Torus, plan: *fft.FFTPlan) ![]bool {
         // Compute polynomial multiplication: a * secret_key
         const poly_res = try plan.processor.poly_mul(&self.a, secret_key);
@@ -101,18 +97,16 @@ pub const TRLWELv1 = struct {
     }
 };
 
-// ============================================================================
 // TRLWE FFT REPRESENTATION
-// ============================================================================
 
-/// TRLWE Level 1 in FFT domain for efficient operations
+/// TRLWE Level 1 in FFT domain for efficient operations.
 pub const TRLWELv1FFT = struct {
     a: [params.implementation.trlwe_lv1.N]f64,
     b: [params.implementation.trlwe_lv1.N]f64,
 
     const Self = @This();
 
-    /// Create FFT representation from TRLWE ciphertext
+    /// Create FFT representation from TRLWE ciphertext.
     pub fn new(trlwe: *const TRLWELv1, plan: *fft.FFTPlan) !TRLWELv1FFT {
         const a_fft = try plan.processor.ifft(&trlwe.a);
         defer plan.processor.allocator.free(a_fft);
@@ -136,7 +130,7 @@ pub const TRLWELv1FFT = struct {
         return result;
     }
 
-    /// Create a dummy FFT representation (all zeros)
+    /// Create a dummy FFT representation (all zeros).
     pub fn newDummy() TRLWELv1FFT {
         return TRLWELv1FFT{
             .a = [_]f64{0.0} ** params.implementation.trlwe_lv1.N,
@@ -145,11 +139,9 @@ pub const TRLWELv1FFT = struct {
     }
 };
 
-// ============================================================================
 // SAMPLE EXTRACTION FUNCTIONS
-// ============================================================================
 
-/// Extract a TLWE sample from TRLWE at a specific index
+/// Extract a TLWE sample from TRLWE at a specific index.
 pub fn sampleExtractIndex(trlwe: *const TRLWELv1, k: usize) tlwe.TLWELv1 {
     var res = tlwe.TLWELv1.new();
 
@@ -168,7 +160,7 @@ pub fn sampleExtractIndex(trlwe: *const TRLWELv1, k: usize) tlwe.TLWELv1 {
     return res;
 }
 
-/// Extract a TLWE Level 0 sample from TRLWE at a specific index
+/// Extract a TLWE Level 0 sample from TRLWE at a specific index.
 pub fn sampleExtractIndex2(trlwe: *const TRLWELv1, k: usize) tlwe.TLWELv0 {
     var res = tlwe.TLWELv0.new();
 
@@ -186,9 +178,7 @@ pub fn sampleExtractIndex2(trlwe: *const TRLWELv1, k: usize) tlwe.TLWELv0 {
     return res;
 }
 
-// ============================================================================
 // TESTS
-// ============================================================================
 
 test "trlwe encryption and decryption" {
     var rng = std.Random.DefaultPrng.init(42);

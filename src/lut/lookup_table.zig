@@ -7,60 +7,60 @@ const std = @import("std");
 const params = @import("../params.zig");
 const trlwe = @import("../trlwe.zig");
 
-/// Lookup table for programmable bootstrapping
+/// Lookup table for programmable bootstrapping.
 ///
-/// A lookup table is a TRLWE ciphertext that encodes a function
-/// for programmable bootstrapping. During blind rotation, the LUT is rotated
-/// based on the encrypted value, effectively evaluating the function on the
+/// A lookup table is a TRLWE ciphertext that encodes a function.
+/// for programmable bootstrapping. During blind rotation, the LUT is rotated.
+/// based on the encrypted value, effectively evaluating the function on the.
 /// encrypted data.
 pub const LookupTable = struct {
     const Self = @This();
 
-    /// Polynomial encoding the function values
+    /// Polynomial encoding the function values.
     poly: trlwe.TRLWELv1,
 
-    /// Create a new lookup table
+    /// Create a new lookup table.
     pub fn new() Self {
         return Self{
             .poly = trlwe.TRLWELv1.new(),
         };
     }
 
-    /// Create a lookup table from an existing TRLWE polynomial
+    /// Create a lookup table from an existing TRLWE polynomial.
     ///
-    /// # Arguments
-    /// * `poly` - TRLWE polynomial containing the encoded function
+    /// # Arguments.
+    /// * `poly` - TRLWE polynomial containing the encoded function.
     pub fn fromPoly(poly: trlwe.TRLWELv1) Self {
         return Self{ .poly = poly };
     }
 
-    /// Get a reference to the underlying polynomial
+    /// Get a reference to the underlying polynomial.
     pub fn getPoly(self: *const Self) *const trlwe.TRLWELv1 {
         return &self.poly;
     }
 
-    /// Get a mutable reference to the underlying polynomial
+    /// Get a mutable reference to the underlying polynomial.
     pub fn getPolyMut(self: *Self) *trlwe.TRLWELv1 {
         return &self.poly;
     }
 
-    /// Copy values from another lookup table
+    /// Copy values from another lookup table.
     ///
-    /// # Arguments
-    /// * `other` - Source lookup table to copy from
+    /// # Arguments.
+    /// * `other` - Source lookup table to copy from.
     pub fn copyFrom(self: *Self, other: *const LookupTable) void {
         @memcpy(self.poly.a[0..], other.poly.a[0..]);
         @memcpy(self.poly.b[0..], other.poly.b[0..]);
     }
 
-    /// Clear the lookup table (sets all coefficients to 0)
+    /// Clear the lookup table (sets all coefficients to 0).
     pub fn clear(self: *Self) void {
         const n = params.implementation.trgsw_lv1.N;
         @memset(self.poly.a[0..n], 0);
         @memset(self.poly.b[0..n], 0);
     }
 
-    /// Check if the lookup table is empty (all coefficients are zero)
+    /// Check if the lookup table is empty (all coefficients are zero).
     pub fn isEmpty(self: *const Self) bool {
         const n = params.implementation.trgsw_lv1.N;
 
@@ -76,9 +76,7 @@ pub const LookupTable = struct {
     }
 };
 
-// ============================================================================
 // TESTS
-// ============================================================================
 
 test "lookup table creation" {
     const lut = LookupTable.new();
