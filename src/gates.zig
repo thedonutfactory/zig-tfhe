@@ -55,7 +55,9 @@ pub const Gates = struct {
 
     /// Homomorphic NAND gate
     pub fn nand(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
-        var tlwe_nand = tlwe_a.neg().add(tlwe_b.neg());
+        const neg_a = tlwe_a.neg();
+        const neg_b = tlwe_b.neg();
+        var tlwe_nand = neg_a.add(&neg_b);
         tlwe_nand.bMut().* = tlwe_nand.b() +% utils.f64ToTorus(0.125);
         return self.bootstrap.bootstrap(&tlwe_nand, cloud_key);
     }
@@ -90,14 +92,17 @@ pub const Gates = struct {
 
     /// Homomorphic NOR gate
     pub fn nor(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
-        var tlwe_nor = tlwe_a.neg().add(tlwe_b.neg());
+        const neg_a = tlwe_a.neg();
+        const neg_b = tlwe_b.neg();
+        var tlwe_nor = neg_a.add(&neg_b);
         tlwe_nor.bMut().* = tlwe_nor.b() +% utils.f64ToTorus(-0.125);
         return self.bootstrap.bootstrap(&tlwe_nor, cloud_key);
     }
 
     /// Homomorphic AND-NOT-Y gate (a AND NOT b)
     pub fn andNy(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
-        var tlwe_and_ny = tlwe_a.neg().add(tlwe_b);
+        const neg_a = tlwe_a.neg();
+        var tlwe_and_ny = neg_a.add(tlwe_b);
         tlwe_and_ny.bMut().* = tlwe_and_ny.b() +% utils.f64ToTorus(-0.125);
         return self.bootstrap.bootstrap(&tlwe_and_ny, cloud_key);
     }
@@ -111,7 +116,8 @@ pub const Gates = struct {
 
     /// Homomorphic OR-NOT-Y gate (NOT a OR b)
     pub fn orNy(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
-        var tlwe_or_ny = tlwe_a.neg().add(tlwe_b);
+        const neg_a = tlwe_a.neg();
+        var tlwe_or_ny = neg_a.add(tlwe_b);
         tlwe_or_ny.bMut().* = tlwe_or_ny.b() +% utils.f64ToTorus(0.125);
         return self.bootstrap.bootstrap(&tlwe_or_ny, cloud_key);
     }

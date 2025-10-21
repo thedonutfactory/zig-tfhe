@@ -121,7 +121,9 @@ pub const TLWELv0 = struct {
 
         // Decode from message * scale where scale = 1/(2*message_modulus)
         const scale = 1.0 / (2.0 * @as(f64, @floatFromInt(message_modulus)));
-        const message = @as(usize, @intFromFloat(@round(res_f64 / scale + 0.5)));
+        // Match Rust: (res_f64 / scale + 0.5) as usize
+        // The +0.5 provides rounding, cast to usize truncates (no additional @round needed!)
+        const message = @as(usize, @intFromFloat(res_f64 / scale + 0.5));
 
         // Normalize to [0, message_modulus)
         return message % message_modulus;
