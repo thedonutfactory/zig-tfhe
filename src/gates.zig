@@ -360,7 +360,60 @@ test "gates bootstrap strategy" {
     try std.testing.expectEqualStrings("vanilla", custom_gates.bootstrapStrategy());
 }
 
-test "gates all and cases" {
+test "gates all NOT cases" {
+    const secret_key = key.SecretKey.new();
+    const gates = Gates.new();
+
+    const test_cases = [_]struct { bool, bool }{
+        .{ true, false },
+    };
+
+    for (test_cases) |case| {
+        const a = case[0];
+        const expected = case[1];
+
+        const ct_a = try utils.Ciphertext.encryptBool(a, params.implementation.tlwe_lv0.ALPHA, &secret_key.key_lv0);
+        const result = gates.not(&ct_a);
+        const decrypted = result.decryptBool(&secret_key.key_lv0);
+
+        std.debug.print("NOT {} = {} (expected: {})\n", .{ a, decrypted, expected });
+        try std.testing.expect(decrypted == expected);
+    }
+}
+
+test "gates all NAND cases" {
+    const secret_key = key.SecretKey.new();
+    const cloud_key = try key.CloudKey.new(std.heap.page_allocator, &secret_key);
+    const gates = Gates.new();
+
+    const test_cases = [_]struct { bool, bool, bool }{
+        .{ true, true, false },
+        .{ true, false, true },
+        .{ false, true, true },
+        .{ false, false, true },
+    };
+
+    for (test_cases) |case| {
+        const a = case[0];
+        const b = case[1];
+        const expected = case[2];
+
+        // Clear FFT plan before each test case to ensure clean state
+        //const fft_mod = @import("fft.zig");
+        //fft_mod.cleanupFFTPlan();
+
+        const ct_a = try utils.Ciphertext.encryptBool(a, params.implementation.tlwe_lv0.ALPHA, &secret_key.key_lv0);
+        const ct_b = try utils.Ciphertext.encryptBool(b, params.implementation.tlwe_lv0.ALPHA, &secret_key.key_lv0);
+
+        const result = try gates.nand(&ct_a, &ct_b, &cloud_key);
+        const decrypted = result.decryptBool(&secret_key.key_lv0);
+
+        std.debug.print("{} NAND {} = {} (expected: {})\n", .{ a, b, decrypted, expected });
+        try std.testing.expect(decrypted == expected);
+    }
+}
+
+test "gates all AND cases" {
     const secret_key = key.SecretKey.new();
     const cloud_key = try key.CloudKey.new(std.heap.page_allocator, &secret_key);
     const gates = Gates.new();
@@ -398,6 +451,9 @@ test "gates all OR cases" {
     const gates = Gates.new();
 
     const test_cases = [_]struct { bool, bool, bool }{
+        .{ false, false, false },
+        .{ false, true, true },
+        .{ true, false, true },
         .{ true, true, true },
     };
 
@@ -413,6 +469,34 @@ test "gates all OR cases" {
         const decrypted = result.decryptBool(&secret_key.key_lv0);
 
         std.debug.print("{} OR {} = {} (expected: {})\n", .{ a, b, decrypted, expected });
+        try std.testing.expectEqual(expected, decrypted);
+    }
+}
+
+test "gates all XOR cases" {
+    const secret_key = key.SecretKey.new();
+    const cloud_key = try key.CloudKey.new(std.heap.page_allocator, &secret_key);
+    const gates = Gates.new();
+
+    const test_cases = [_]struct { bool, bool, bool }{
+        .{ false, false, false },
+        .{ false, true, true },
+        .{ true, false, true },
+        .{ true, true, false },
+    };
+
+    for (test_cases) |case| {
+        const a = case[0];
+        const b = case[1];
+        const expected = case[2];
+
+        const ct_a = try utils.Ciphertext.encryptBool(a, params.implementation.tlwe_lv0.ALPHA, &secret_key.key_lv0);
+        const ct_b = try utils.Ciphertext.encryptBool(b, params.implementation.tlwe_lv0.ALPHA, &secret_key.key_lv0);
+
+        const result = try gates.xor(&ct_a, &ct_b, &cloud_key);
+        const decrypted = result.decryptBool(&secret_key.key_lv0);
+
+        std.debug.print("{} XOR {} = {} (expected: {})\n", .{ a, b, decrypted, expected });
         try std.testing.expectEqual(expected, decrypted);
     }
 }
