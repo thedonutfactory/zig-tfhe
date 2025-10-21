@@ -12,8 +12,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
-        zig-version: ['0.15.1']
+        os: [ubuntu-latest, macos-latest]
+        zig-version: ['0.12.0', '0.13.0', '0.14.0', '0.15.1']
     
     steps:
       - name: Checkout code

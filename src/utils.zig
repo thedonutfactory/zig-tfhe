@@ -26,8 +26,10 @@ pub const Ciphertext = tlwe.TLWELv0;
 
 /// Convert a floating-point number to torus representation.
 pub fn f64ToTorus(d: f64) params.Torus {
-    const torus = (@mod(d, 1.0)) * @as(f64, @floatFromInt(std.math.pow(u64, 2, params.TORUS_SIZE)));
-    return @as(params.Torus, @intFromFloat(torus));
+    const normalized = @mod(d, 1.0);
+    const torus = normalized * @as(f64, @floatFromInt(std.math.pow(u64, 2, params.TORUS_SIZE)));
+    const clamped = @max(0.0, @min(torus, @as(f64, @floatFromInt(std.math.maxInt(params.Torus)))));
+    return @as(params.Torus, @intFromFloat(clamped));
 }
 
 /// Convert a torus value to floating-point representation.
