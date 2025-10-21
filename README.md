@@ -1,8 +1,9 @@
 # zig-tfhe: Zig TFHE Library
 
+[![CI](https://github.com/thedonutfactory/zig-tfhe/workflows/CI/badge.svg)](https://github.com/thedonutfactory/zig-tfhe/actions)
 [![Zig](https://img.shields.io/badge/zig-0.12%2B-orange.svg)](https://ziglang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Security](https://img.shields.io/badge/security-128--bit-green.svg)](https://github.com/your-org/zig-tfhe)
+[![Security](https://img.shields.io/badge/security-128--bit-green.svg)](https://github.com/thedonutfactory/zig-tfhe)
 
 A high-performance Zig implementation of TFHE (Torus Fully Homomorphic Encryption).
 
@@ -12,7 +13,7 @@ A high-performance Zig implementation of TFHE (Torus Fully Homomorphic Encryptio
 
 zig-tfhe is a comprehensive homomorphic encryption library that enables computation on encrypted data without decryption, built in Zig for performance and safety.
 
-(Not the language you were looking for? Check out our [rust](https://github.com/thedonutfactory/rs-tfhe) or [go](https://github.com/thedonutfactory/go-tfhe) sister projects) 
+> Not the language you were looking for? Check out our [Rust](https://github.com/thedonutfactory/rs-tfhe) or [Go](https://github.com/thedonutfactory/go-tfhe) sister projects.
 
 ### Key Features
 
@@ -24,19 +25,21 @@ zig-tfhe is a comprehensive homomorphic encryption library that enables computat
 - **Multiple Security Levels**: 80-bit, 110-bit, and 128-bit security parameters
 - **Specialized Uint Parameters**: Optimized parameter sets for different message moduli (1-8 bits)
 - **Homomorphic Gates**: Complete set of boolean operations (AND, OR, NAND, NOR, XOR, XNOR, NOT, MUX)
-- **Fast Arithmetic**: Efficient multi-bit arithmetic operations using nibble-based addition
+- **Fast Arithmetic**: Efficient multi-bit arithmetic operations using ripple-carry adders
 - **Parallel Processing**: Native Zig parallelization for batch operations
-- **Optimized FFT**: Multiple FFT implementations including SIMD optimizations
-- **Feature Flags**: Modular compilation with optional features
+- **Optimized FFT**: High-performance FFT implementations with SIMD support
+- **Memory Safety**: Zig's compile-time safety guarantees with comprehensive allocator tracking
 
-## Installation
+## Quick Start
 
-### Prerequisites
+### Installation
+
+#### Prerequisites
 
 - Zig 0.12.0 or later
 - A C compiler (for linking math libraries)
 
-### Building
+#### Building
 
 ```bash
 git clone https://github.com/thedonutfactory/zig-tfhe
@@ -44,37 +47,11 @@ cd zig-tfhe
 zig build
 ```
 
-### Running Examples
-
-```bash
-# Basic examples
-zig build run -- example add_two_numbers
-zig build run -- example gates_demo
-
-# LUT bootstrapping examples
-zig build run -- example lut_bootstrapping
-zig build run -- example lut_arithmetic
-```
-
-### Running Tests
-
-```bash
-zig build test
-```
-
-### Running Benchmarks
-
-```bash
-zig build bench
-```
-
-## Quick Start
-
-### Basic Homomorphic Operations
+### Basic Usage
 
 ```zig
-const tfhe = @import("zig-tfhe");
 const std = @import("std");
+const tfhe = @import("main");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -82,212 +59,184 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     // Generate keys
-    const secret_key = try tfhe.key.SecretKey.init(allocator);
-    const cloud_key = try tfhe.key.CloudKey.init(allocator, &secret_key);
+    const secret_key = tfhe.key.SecretKey.new();
+    var cloud_key = try tfhe.key.CloudKey.new(allocator, &secret_key);
+    defer cloud_key.deinit(allocator);
 
-    // Encrypt boolean values
-    const ct_true = try tfhe.utils.Ciphertext.encrypt(true, &secret_key.key_lv0, allocator);
-    const ct_false = try tfhe.utils.Ciphertext.encrypt(false, &secret_key.key_lv0, allocator);
+    // Encrypt two boolean values
+    const ct_a = try tfhe.tlwe.TLWELv0.encryptBool(
+        true,
+        tfhe.params.implementation.tlwe_lv0.ALPHA,
+        &secret_key.key_lv0
+    );
+    const ct_b = try tfhe.tlwe.TLWELv0.encryptBool(
+        false,
+        tfhe.params.implementation.tlwe_lv0.ALPHA,
+        &secret_key.key_lv0
+    );
 
-    // Perform homomorphic operations
-    var gates = tfhe.gates.Gates.init(allocator, &cloud_key);
-    const result = try gates.hom_and(&ct_true, &ct_false, allocator);
+    // Perform homomorphic AND operation
+    const gates_inst = tfhe.gates.Gates.new();
+    const result = try gates_inst.andGate(&ct_a, &ct_b, &cloud_key);
 
     // Decrypt result
-    const decrypted = result.decrypt(&secret_key.key_lv0);
-    std.debug.assert(decrypted == false);
+    const decrypted = result.decryptBool(&secret_key.key_lv0);
+    std.debug.print("true AND false = {}\n", .{decrypted}); // Prints: false
 }
 ```
-
-### Programmable Bootstrapping
-
-```zig
-const tfhe = @import("zig-tfhe");
-const std = @import("std");
-
-pub fn lut_bootstrap_example() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
-
-    const secret_key = try tfhe.key.SecretKey.init(allocator);
-    const cloud_key = try tfhe.key.CloudKey.init(allocator, &secret_key);
-    var bootstrap = tfhe.bootstrap.lut.LutBootstrap.init(allocator);
-    
-    // Encrypt a value
-    const encrypted = try tfhe.utils.Ciphertext.encrypt_lwe_message(5, 8, 0.0001, &secret_key.key_lv0, allocator);
-    
-    // Define a function to evaluate (square function)
-    const square_func = struct {
-        fn call(x: usize) usize {
-            return (x * x) % 8;
-        }
-    }.call;
-    
-    // Apply function during bootstrapping
-    const result = try bootstrap.bootstrap_func(&encrypted, square_func, 8, &cloud_key, allocator);
-    
-    // Decrypt result
-    const decrypted = result.decrypt_lwe_message(8, &secret_key.key_lv0);
-    std.debug.assert(decrypted == 1); // 5^2 mod 8 = 25 mod 8 = 1
-}
-```
-
-## Architecture
-
-### Core Components
-
-#### Encryption Schemes
-- **TLWE**: Torus Learning With Errors for level-0 ciphertexts
-- **TRLWE**: Torus Ring Learning With Errors for level-1 ciphertexts
-- **TRGSW**: Torus GSW for bootstrapping keys
-
-#### Bootstrapping Strategies
-- **Vanilla Bootstrap**: Traditional noise refreshing
-- **LUT Bootstrap**: Programmable bootstrapping with lookup tables
-
-#### FFT Implementations
-- **Standard FFT**: Pure Zig implementation
-- **SIMD FFT**: AVX/FMA optimized for x86_64
-- **Real FFT**: Optimized for real-valued polynomials
-
-### Parameter Sets
-
-#### Standard Security Parameters
-- `SECURITY_80_BIT`: 80-bit security level
-- `SECURITY_110_BIT`: 110-bit security level  
-- `SECURITY_128_BIT`: 128-bit security level (default)
-
-#### Specialized Uint Parameters
-- `SECURITY_UINT1`: Binary operations (messageModulus=2)
-- `SECURITY_UINT2`: 2-bit arithmetic (messageModulus=4)
-- `SECURITY_UINT3`: 3-bit arithmetic (messageModulus=8)
-- `SECURITY_UINT4`: 4-bit arithmetic (messageModulus=16)
-- `SECURITY_UINT5`: 5-bit arithmetic (messageModulus=32) - Recommended for complex operations
-- `SECURITY_UINT6`: 6-bit arithmetic (messageModulus=64)
-- `SECURITY_UINT7`: 7-bit arithmetic (messageModulus=128)
-- `SECURITY_UINT8`: 8-bit arithmetic (messageModulus=256)
 
 ## Examples
 
-The `examples/` directory contains comprehensive examples:
+The `examples/` directory contains several demonstrations:
 
-### Basic Examples
-- `add_two_numbers.zig`: Simple homomorphic addition
-- `gates_demo.zig`: Boolean gate operations
-- `security_levels.zig`: Different security parameter comparisons
+### Add Two Numbers
 
-### LUT Bootstrapping Examples
-- `lut_bootstrapping.zig`: Complete programmable bootstrapping demo
-- `lut_bootstrapping_simple.zig`: Minimal LUT example
-- `lut_add_two_numbers.zig`: Fast 8-bit addition using nibble operations
-- `lut_arithmetic.zig`: Various arithmetic operations
-- `lut_uint_parameters.zig`: Parameter set comparisons
+Demonstrates homomorphic integer addition using a full adder circuit:
 
-### Performance Examples
-- `batch_gates.zig`: Parallel gate processing
-- `fft_diagnostics.zig`: FFT performance analysis
+```bash
+zig build add_two_numbers
+```
+
+This example adds two 16-bit numbers (402 + 304 = 706) entirely in the encrypted domain using homomorphic XOR, AND, and OR gates. See [examples/README.md](examples/README.md) for details.
+
+## Testing
+
+Run all tests:
+
+```bash
+zig build test
+```
+
+Run specific test modules:
+
+```bash
+zig test src/gates.zig --test-filter "gates all"
+zig test src/utils.zig
+zig test src/key.zig --test-filter "secret key"
+```
+
+**Note**: The full test suite includes cloud key generation which takes ~30 seconds. Use test filters to run faster subsets during development.
+
+## API Overview
+
+### Core Modules
+
+- **`params`** - Security parameter selection (80-bit, 110-bit, 128-bit, Uint1-8)
+- **`key`** - Secret key and cloud key generation
+- **`tlwe`** - TLWE (Torus Learning With Errors) encryption
+- **`trlwe`** - TRLWE (Ring Learning With Errors) encryption
+- **`trgsw`** - TRGSW encryption for bootstrapping
+- **`gates`** - Homomorphic logic gates (AND, OR, NOT, XOR, etc.)
+- **`lut`** - Programmable bootstrapping with lookup tables
+- **`fft`** - Fast Fourier Transform for polynomial operations
+- **`bootstrap`** - Noise refreshing operations
+- **`utils`** - Utility functions for torus operations and noise generation
+- **`bit_utils`** - Bit manipulation and encryption helpers
+
+### Security Parameters
+
+Choose security level based on your requirements:
+
+```zig
+const params = @import("params");
+
+// High security (default)
+const security = params.SECURITY_128_BIT;
+
+// Balanced performance and security
+const security = params.SECURITY_110_BIT;
+
+// Development/testing (faster)
+const security = params.SECURITY_80_BIT;
+
+// Specialized for multi-bit messages
+const security = params.SECURITY_UINT4; // 4-bit messages
+```
+
+### Homomorphic Operations
+
+All boolean gates supported:
+
+```zig
+const gates_inst = tfhe.gates.Gates.new();
+
+// Basic gates
+const and_result = try gates_inst.andGate(&ct_a, &ct_b, &cloud_key);
+const or_result = try gates_inst.orGate(&ct_a, &ct_b, &cloud_key);
+const xor_result = try gates_inst.xorGate(&ct_a, &ct_b, &cloud_key);
+const not_result = gates_inst.notGate(&ct_a);
+
+// Advanced gates
+const nand_result = try gates_inst.nandGate(&ct_a, &ct_b, &cloud_key);
+const nor_result = try gates_inst.norGate(&ct_a, &ct_b, &cloud_key);
+const mux_result = try gates_inst.muxNaive(&ct_cond, &ct_true, &ct_false, &cloud_key);
+```
 
 ## Performance
 
-![Benchmarks](https://img.shields.io/badge/Benchmarks-Native-orange.svg)
-![Speedup](https://img.shields.io/badge/Speedup-2.7x--faster-brightgreen.svg)
+Typical performance on modern hardware (M-series Mac, ~3-4 GHz):
 
-### Benchmarks
+- **Gate Operation**: ~350-400ms per gate (includes bootstrapping)
+- **Key Generation**: ~15-20 seconds for full cloud key
+- **16-bit Addition**: ~30-35 seconds (80 gates)
 
-Run benchmarks with:
+Performance is dominated by bootstrapping operations, which are necessary to keep noise levels manageable for continued computation.
+
+## Architecture
+
+### TFHE Scheme Overview
+
+```
+TLWE (Level 0)
+    ↓ (Bootstrap)
+TRLWE (Level 1) ← Uses FFT for efficiency
+    ↓
+TRGSW (Gadget Decomposition)
+    ↓
+Homomorphic Gates
+```
+
+### Key Components
+
+1. **TLWE**: Basic torus LWE encryption (smaller dimension)
+2. **TRLWE**: Ring-based LWE over polynomial rings (larger dimension)
+3. **TRGSW**: Gadget switching keys enabling external products
+4. **Bootstrap**: Noise reduction through homomorphic decryption
+5. **FFT**: Efficient polynomial multiplication in frequency domain
+
+## Documentation
+
+All modules include comprehensive inline documentation. Generate docs with:
 
 ```bash
-zig build bench
+zig build-lib src/main.zig -femit-docs
 ```
 
-### Performance Characteristics
-
-| Operation | Time (ms) | Notes |
-|-----------|-----------|-------|
-| Key Generation | ~135 | One-time setup |
-| Boolean Gate | ~15 | Per gate operation |
-| Bootstrap | ~15-20 | Noise refreshing |
-| LUT Bootstrap | ~15-20 | Function evaluation + noise refreshing |
-| 8-bit Addition | ~50 | 3 bootstraps vs 8 for bit-by-bit |
-
-### Optimization Features
-
-- **Parallel Processing**: Native Zig parallelization
-- **SIMD FFT**: AVX/FMA optimizations for x86_64
-- **Specialized Parameters**: Optimized for specific message moduli
-- **LUT Reuse**: Pre-computed lookup tables for repeated functions
-
-## API Reference
-
-### Core Types
-
-#### `Ciphertext`
-Main ciphertext type supporting homomorphic operations.
-
-```zig
-pub const Ciphertext = struct {
-    pub fn encrypt(plaintext: bool, key: *const SecretKeyLv0, allocator: Allocator) !Self;
-    pub fn decrypt(self: *const Self, key: *const SecretKeyLv0) bool;
-    pub fn encrypt_lwe_message(msg: usize, modulus: usize, alpha: f64, key: *const SecretKeyLv0, allocator: Allocator) !Self;
-    pub fn decrypt_lwe_message(self: *const Self, modulus: usize, key: *const SecretKeyLv0) usize;
-};
-```
-
-#### `Gates`
-Boolean gate operations.
-
-```zig
-pub const Gates = struct {
-    pub fn hom_and(self: *Self, a: *const Ciphertext, b: *const Ciphertext, allocator: Allocator) !Ciphertext;
-    pub fn hom_or(self: *Self, a: *const Ciphertext, b: *const Ciphertext, allocator: Allocator) !Ciphertext;
-    pub fn hom_xor(self: *Self, a: *const Ciphertext, b: *const Ciphertext, allocator: Allocator) !Ciphertext;
-    pub fn hom_not(self: *Self, a: *const Ciphertext, allocator: Allocator) !Ciphertext;
-    pub fn mux(self: *Self, cond: *const Ciphertext, a: *const Ciphertext, b: *const Ciphertext, allocator: Allocator) !Ciphertext;
-};
-```
-
-#### `LutBootstrap`
-Programmable bootstrapping with lookup tables.
-
-```zig
-pub const LutBootstrap = struct {
-    pub fn bootstrap_func(self: *Self, ct: *const Ciphertext, f: fn(usize) usize, modulus: usize, key: *const CloudKey, allocator: Allocator) !Ciphertext;
-    pub fn bootstrap_lut(self: *Self, ct: *const Ciphertext, lut: *const LookupTable, key: *const CloudKey, allocator: Allocator) !Ciphertext;
-};
-```
+Or browse the source files - each module has detailed header documentation explaining its purpose and usage.
 
 ## Contributing
 
-Contributions are welcome! Please see the existing code style and add tests for new functionality.
+Contributions are welcome! This library is a port of [rs-tfhe](https://github.com/thedonutfactory/rs-tfhe) with Zig-specific optimizations and idioms.
 
-### Development Setup
+### Development
 
-```bash
-git clone <repository>
-cd zig-tfhe
-zig build test
-zig build bench
-```
-
-### Running Examples
-
-```bash
-# Basic examples
-zig build run -- example add_two_numbers
-zig build run -- example gates_demo
-
-# LUT bootstrapping examples
-zig build run -- example lut_bootstrapping
-zig build run -- example lut_add_two_numbers
-```
+- Follow idiomatic Zig style (see `zig fmt`)
+- Add tests for new functionality
+- Document public APIs with `///` doc comments
+- Use proper memory management with allocators
 
 ## License
 
-This project is licensed under the same terms as the original TFHE library. See [LICENSE](LICENSE) for details.
+MIT License - see [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
-- Based on the TFHE library by Ilaria Chillotti, Nicolas Gama, Mariya Georgieva, and Malika Izabachène
-- Ported from the rs-tfhe Rust implementation
-- FFT optimizations from tfhe-go reference implementation
+This library is based on:
+- [TFHE](https://tfhe.github.io/tfhe/) - The original TFHE library
+- [rs-tfhe](https://github.com/thedonutfactory/rs-tfhe) - Rust implementation
+- Research papers on TFHE and programmable bootstrapping
+
+## Related Projects
+
+- [rs-tfhe](https://github.com/thedonutfactory/rs-tfhe) - Rust implementation
+- [go-tfhe](https://github.com/thedonutfactory/go-tfhe) - Go implementation

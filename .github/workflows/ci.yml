@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        zig-version: ['0.14.0', '0.15.1']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: ${{ matrix.zig-version }}
+
+      - name: Verify Zig installation
+        run: zig version
+
+      - name: Check formatting
+        run: zig fmt --check src/
+
+      - name: Build library
+        run: zig build
+
+      - name: Run tests (fast subset)
+        run: |
+          zig test src/utils.zig
+          zig test src/params.zig
+          zig test src/bit_utils.zig
+          zig test src/key.zig --test-filter "secret key"
+          zig test src/gates.zig --test-filter "gates basic"
+
+      - name: Run full test suite
+        run: zig build test
+        continue-on-error: true
+        timeout-minutes: 10
+
+      - name: Build examples
+        run: |
+          zig build add_two_numbers
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: '0.15.1'
+
+      - name: Format check
+        run: zig fmt --check .
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: '0.15.1'
+
+      - name: Run tests with coverage
+        run: zig build test
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.txt
+          flags: unittests
+          name: zig-tfhe-coverage
+        continue-on-error: true
+

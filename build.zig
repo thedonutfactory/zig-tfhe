@@ -9,28 +9,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
-    // Create the main executable
-    const exe = b.addExecutable(.{
-        .name = "zig-tfhe",
-        .root_module = main_module,
-    });
-
-    exe.linkLibC();
-    exe.linkSystemLibrary("m");
-
-    b.installArtifact(exe);
-
-    // Create run command
-    const run_cmd = b.addRunArtifact(exe);
-    run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
-
-    // Create run step
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
-
     // Create test executable
     const test_exe = b.addTest(.{
         .root_module = main_module,
@@ -44,4 +22,26 @@ pub fn build(b: *std.Build) void {
     // Create test step
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&test_run.step);
+
+    // Create example: add_two_numbers
+    const add_two_numbers_module = b.addModule("add_two_numbers", .{
+        .root_source_file = b.path("examples/add_two_numbers.zig"),
+        .target = target,
+    });
+    add_two_numbers_module.addImport("main", main_module);
+
+    const add_two_numbers_exe = b.addExecutable(.{
+        .name = "add_two_numbers",
+        .root_module = add_two_numbers_module,
+    });
+    add_two_numbers_exe.linkLibC();
+    add_two_numbers_exe.linkSystemLibrary("m");
+
+    b.installArtifact(add_two_numbers_exe);
+
+    const add_two_numbers_run = b.addRunArtifact(add_two_numbers_exe);
+    add_two_numbers_run.step.dependOn(b.getInstallStep());
+
+    const add_two_numbers_step = b.step("add_two_numbers", "Run the add_two_numbers example");
+    add_two_numbers_step.dependOn(&add_two_numbers_run.step);
 }
