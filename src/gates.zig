@@ -45,7 +45,7 @@ pub const Gates = struct {
     }
 
     /// Homomorphic NAND gate.
-    pub fn nand(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
+    pub fn nandGate(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
         const neg_a = tlwe_a.neg();
         const neg_b = tlwe_b.neg();
         var tlwe_nand = neg_a.add(&neg_b);
@@ -68,21 +68,21 @@ pub const Gates = struct {
     }
 
     /// Homomorphic XOR gate.
-    pub fn xor(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
+    pub fn xorGate(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
         var tlwe_xor = tlwe_a.addMul(tlwe_b, 2);
         tlwe_xor.bMut().* = tlwe_xor.b() +% utils.f64ToTorus(0.25);
         return self.bootstrap.bootstrap(&tlwe_xor, cloud_key);
     }
 
     /// Homomorphic XNOR gate.
-    pub fn xnor(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
+    pub fn xnorGate(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
         var tlwe_xnor = tlwe_a.subMul(tlwe_b, 2);
         tlwe_xnor.bMut().* = tlwe_xnor.b() +% utils.f64ToTorus(-0.25);
         return self.bootstrap.bootstrap(&tlwe_xnor, cloud_key);
     }
 
     /// Homomorphic NOR gate.
-    pub fn nor(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
+    pub fn norGate(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
         const neg_a = tlwe_a.neg();
         const neg_b = tlwe_b.neg();
         var tlwe_nor = neg_a.add(&neg_b);
@@ -91,7 +91,7 @@ pub const Gates = struct {
     }
 
     /// Homomorphic AND-NOT-Y gate (a AND NOT b).
-    pub fn andNy(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
+    pub fn andNyGate(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
         const neg_a = tlwe_a.neg();
         var tlwe_and_ny = neg_a.add(tlwe_b);
         tlwe_and_ny.bMut().* = tlwe_and_ny.b() +% utils.f64ToTorus(-0.125);
@@ -99,14 +99,14 @@ pub const Gates = struct {
     }
 
     /// Homomorphic AND-Y-NOT gate (a AND NOT b).
-    pub fn andYn(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
+    pub fn andYnGate(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
         var tlwe_and_yn = tlwe_a.sub(tlwe_b);
         tlwe_and_yn.bMut().* = tlwe_and_yn.b() +% utils.f64ToTorus(-0.125);
         return self.bootstrap.bootstrap(&tlwe_and_yn, cloud_key);
     }
 
     /// Homomorphic OR-NOT-Y gate (NOT a OR b).
-    pub fn orNy(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
+    pub fn orNyGate(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
         const neg_a = tlwe_a.neg();
         var tlwe_or_ny = neg_a.add(tlwe_b);
         tlwe_or_ny.bMut().* = tlwe_or_ny.b() +% utils.f64ToTorus(0.125);
@@ -114,7 +114,7 @@ pub const Gates = struct {
     }
 
     /// Homomorphic OR-Y-NOT gate (a OR NOT b).
-    pub fn orYn(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
+    pub fn orYnGate(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
         var tlwe_or_yn = tlwe_a.sub(tlwe_b);
         tlwe_or_yn.bMut().* = tlwe_or_yn.b() +% utils.f64ToTorus(0.125);
         return self.bootstrap.bootstrap(&tlwe_or_yn, cloud_key);
@@ -123,13 +123,13 @@ pub const Gates = struct {
     /// Homomorphic MUX gate (a ? b : c) - naive version.
     pub fn muxNaive(self: *const Self, tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, tlwe_c: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
         const a_and_b = try self.andGate(tlwe_a, tlwe_b, cloud_key);
-        const not_a = self.not(tlwe_a);
+        const not_a = self.notGate(tlwe_a);
         const nand_a_c = try self.andGate(&not_a, tlwe_c, cloud_key);
         return self.orGate(&a_and_b, &nand_a_c, cloud_key);
     }
 
     /// Homomorphic NOT gate (no bootstrapping needed).
-    pub fn not(self: *const Self, tlwe_a: *const utils.Ciphertext) utils.Ciphertext {
+    pub fn notGate(self: *const Self, tlwe_a: *const utils.Ciphertext) utils.Ciphertext {
         _ = self;
         return tlwe_a.neg();
     }
@@ -156,7 +156,7 @@ pub const Gates = struct {
 /// Convenience function for NAND gate using default bootstrap.
 pub fn nand(tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
     const gates = Gates.new();
-    return gates.nand(tlwe_a, tlwe_b, cloud_key);
+    return gates.nandGate(tlwe_a, tlwe_b, cloud_key);
 }
 
 /// Convenience function for OR gate using default bootstrap.
@@ -174,43 +174,43 @@ pub fn andGate(tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext,
 /// Convenience function for XOR gate using default bootstrap.
 pub fn xor(tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
     const gates = Gates.new();
-    return gates.xor(tlwe_a, tlwe_b, cloud_key);
+    return gates.xorGate(tlwe_a, tlwe_b, cloud_key);
 }
 
 /// Convenience function for XNOR gate using default bootstrap.
 pub fn xnor(tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
     const gates = Gates.new();
-    return gates.xnor(tlwe_a, tlwe_b, cloud_key);
+    return gates.xnorGate(tlwe_a, tlwe_b, cloud_key);
 }
 
 /// Convenience function for NOR gate using default bootstrap.
 pub fn nor(tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
     const gates = Gates.new();
-    return gates.nor(tlwe_a, tlwe_b, cloud_key);
+    return gates.norGate(tlwe_a, tlwe_b, cloud_key);
 }
 
 /// Convenience function for AND_NY gate using default bootstrap.
 pub fn andNy(tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
     const gates = Gates.new();
-    return gates.andNy(tlwe_a, tlwe_b, cloud_key);
+    return gates.andNyGate(tlwe_a, tlwe_b, cloud_key);
 }
 
 /// Convenience function for AND_YN gate using default bootstrap.
 pub fn andYn(tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
     const gates = Gates.new();
-    return gates.andYn(tlwe_a, tlwe_b, cloud_key);
+    return gates.andYnGate(tlwe_a, tlwe_b, cloud_key);
 }
 
 /// Convenience function for OR_NY gate using default bootstrap.
 pub fn orNy(tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
     const gates = Gates.new();
-    return gates.orNy(tlwe_a, tlwe_b, cloud_key);
+    return gates.orNyGate(tlwe_a, tlwe_b, cloud_key);
 }
 
 /// Convenience function for OR_YN gate using default bootstrap.
 pub fn orYn(tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext, cloud_key: *const key.CloudKey) !utils.Ciphertext {
     const gates = Gates.new();
-    return gates.orYn(tlwe_a, tlwe_b, cloud_key);
+    return gates.orYnGate(tlwe_a, tlwe_b, cloud_key);
 }
 
 /// Convenience function for naive MUX gate using default bootstrap.
@@ -222,7 +222,7 @@ pub fn muxNaive(tlwe_a: *const utils.Ciphertext, tlwe_b: *const utils.Ciphertext
 /// Convenience function for NOT gate.
 pub fn not(tlwe_a: *const utils.Ciphertext) utils.Ciphertext {
     const gates = Gates.new();
-    return gates.not(tlwe_a);
+    return gates.notGate(tlwe_a);
 }
 
 /// Convenience function for COPY.
@@ -310,8 +310,8 @@ test "gates basic operations" {
     try std.testing.expect(ct_false.decryptBool(&secret_key.key_lv0) == false);
 
     // Test NOT gate
-    const not_true = gates.not(&ct_true);
-    const not_false = gates.not(&ct_false);
+    const not_true = gates.notGate(&ct_true);
+    const not_false = gates.notGate(&ct_false);
 
     try std.testing.expect(not_true.decryptBool(&secret_key.key_lv0) == false);
     try std.testing.expect(not_false.decryptBool(&secret_key.key_lv0) == true);
@@ -364,7 +364,7 @@ test "gates all NOT cases" {
         const expected = case[1];
 
         const ct_a = try utils.Ciphertext.encryptBool(a, params.implementation.tlwe_lv0.ALPHA, &secret_key.key_lv0);
-        const result = gates.not(&ct_a);
+        const result = gates.notGate(&ct_a);
         const decrypted = result.decryptBool(&secret_key.key_lv0);
 
         try std.testing.expect(decrypted == expected);
@@ -391,7 +391,7 @@ test "gates all NAND cases" {
         const ct_a = try utils.Ciphertext.encryptBool(a, params.implementation.tlwe_lv0.ALPHA, &secret_key.key_lv0);
         const ct_b = try utils.Ciphertext.encryptBool(b, params.implementation.tlwe_lv0.ALPHA, &secret_key.key_lv0);
 
-        const result = try gates.nand(&ct_a, &ct_b, &cloud_key);
+        const result = try gates.nandGate(&ct_a, &ct_b, &cloud_key);
         const decrypted = result.decryptBool(&secret_key.key_lv0);
 
         try std.testing.expect(decrypted == expected);
@@ -476,7 +476,7 @@ test "gates all XOR cases" {
         const ct_a = try utils.Ciphertext.encryptBool(a, params.implementation.tlwe_lv0.ALPHA, &secret_key.key_lv0);
         const ct_b = try utils.Ciphertext.encryptBool(b, params.implementation.tlwe_lv0.ALPHA, &secret_key.key_lv0);
 
-        const result = try gates.xor(&ct_a, &ct_b, &cloud_key);
+        const result = try gates.xorGate(&ct_a, &ct_b, &cloud_key);
         const decrypted = result.decryptBool(&secret_key.key_lv0);
 
         try std.testing.expectEqual(expected, decrypted);
@@ -503,7 +503,7 @@ test "gates all NOR cases" {
         const ct_a = try utils.Ciphertext.encryptBool(a, params.implementation.tlwe_lv0.ALPHA, &secret_key.key_lv0);
         const ct_b = try utils.Ciphertext.encryptBool(b, params.implementation.tlwe_lv0.ALPHA, &secret_key.key_lv0);
 
-        const result = try gates.nor(&ct_a, &ct_b, &cloud_key);
+        const result = try gates.norGate(&ct_a, &ct_b, &cloud_key);
         const decrypted = result.decryptBool(&secret_key.key_lv0);
 
         try std.testing.expectEqual(expected, decrypted);
