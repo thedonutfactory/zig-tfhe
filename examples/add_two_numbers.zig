@@ -29,7 +29,7 @@ fn fullAdder(
     ct_c: *const utils.Ciphertext,
 ) !struct { sum: utils.Ciphertext, carry: utils.Ciphertext } {
     // a XOR b
-    const a_xor_b = try gates_inst.xor(ct_a, ct_b, cloud_key);
+    const a_xor_b = try gates_inst.xorGate(ct_a, ct_b, cloud_key);
 
     // a AND b
     const a_and_b = try gates_inst.andGate(ct_a, ct_b, cloud_key);
@@ -38,7 +38,7 @@ fn fullAdder(
     const a_xor_b_and_c = try gates_inst.andGate(&a_xor_b, ct_c, cloud_key);
 
     // sum = (a XOR b) XOR c
-    const ct_sum = try gates_inst.xor(&a_xor_b, ct_c, cloud_key);
+    const ct_sum = try gates_inst.xorGate(&a_xor_b, ct_c, cloud_key);
 
     // carry = (a AND b) OR ((a XOR b) AND c)
     const ct_carry = try gates_inst.orGate(&a_and_b, &a_xor_b_and_c, cloud_key);

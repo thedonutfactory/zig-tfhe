@@ -1,5 +1,6 @@
 # zig-tfhe: Zig TFHE Library
 
+[![CI](https://github.com/thedonutfactory/zig-tfhe/workflows/CI/badge.svg)](https://github.com/thedonutfactory/zig-tfhe/actions)
 [![Zig](https://img.shields.io/badge/zig-0.12%2B-orange.svg)](https://ziglang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Security](https://img.shields.io/badge/security-128--bit-green.svg)](https://github.com/thedonutfactory/zig-tfhe)
