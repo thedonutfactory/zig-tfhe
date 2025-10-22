@@ -27,7 +27,6 @@ zig-tfhe is a comprehensive homomorphic encryption library that enables computat
 - **Homomorphic Gates**: Complete set of boolean operations (AND, OR, NAND, NOR, XOR, XNOR, NOT, MUX)
 - **Fast Arithmetic**: Efficient multi-bit arithmetic operations using ripple-carry adders
 - **Parallel Processing**: Native Zig parallelization for batch operations
-- **Optimized FFT**: High-performance FFT implementations with SIMD support
 - **Memory Safety**: Zig's compile-time safety guarantees with comprehensive allocator tracking
 
 ## Quick Start
