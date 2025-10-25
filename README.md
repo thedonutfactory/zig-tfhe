@@ -175,9 +175,9 @@ const mux_result = try gates_inst.muxNaive(&ct_cond, &ct_true, &ct_false, &cloud
 
 Typical performance on modern hardware (M-series Mac, ~3-4 GHz):
 
-- **Gate Operation**: ~350-400ms per gate (includes bootstrapping)
-- **Key Generation**: ~15-20 seconds for full cloud key
-- **16-bit Addition**: ~30-35 seconds (80 gates)
+- **Gate Operation**: ~40ms per gate (includes bootstrapping)
+- **Key Generation**: ~100ms seconds for full cloud key
+- **16-bit Addition**: ~1 seconds (80 gates)
 
 Performance is dominated by bootstrapping operations, which are necessary to keep noise levels manageable for continued computation.
 
