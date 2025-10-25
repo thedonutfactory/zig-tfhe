@@ -1,8 +1,24 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
+    // Default to native CPU with all features for best performance
+    const target = b.standardTargetOptions(.{
+        .default_target = .{
+            .cpu_arch = null, // Use native architecture
+            .os_tag = null, // Use native OS
+            .abi = null, // Use native ABI
+            .cpu_model = .native, // Use native CPU model (enables CPU-specific optimizations)
+        },
+    });
+
+    // Default to ReleaseFast for optimal performance
+    // TFHE is computationally intensive, so we want fast execution by default
+    // Can still override with -Doptimize=Debug for debugging
+    const optimize = b.option(
+        std.builtin.OptimizeMode,
+        "optimize",
+        "Prioritize performance, safety, or binary size (-O flag)",
+    ) orelse .ReleaseFast;
 
     // Create a module for the main source
     const main_module = b.addModule("main", .{
