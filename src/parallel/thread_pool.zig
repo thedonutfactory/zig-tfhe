@@ -51,7 +51,7 @@ pub const ThreadPool = struct {
         // Use threading for larger inputs
         const num_threads = std.Thread.getCpuCount() catch 1;
         const chunk_size = @max(1, input.len / num_threads);
-        
+
         var result = std.heap.page_allocator.alloc(U, input.len) catch @panic("Failed to allocate result buffer");
         var threads: [16]std.Thread = undefined; // Support up to 16 threads
         var thread_count: usize = 0;
@@ -60,7 +60,7 @@ pub const ThreadPool = struct {
         var start: usize = 0;
         while (start < input.len and thread_count < threads.len) {
             const end = @min(start + chunk_size, input.len);
-            
+
             threads[thread_count] = std.Thread.spawn(.{}, struct {
                 fn worker(input_slice: []const T, output_slice: []U, func: *const fn (*const T) U) void {
                     for (input_slice, 0..) |item, i| {
@@ -68,7 +68,7 @@ pub const ThreadPool = struct {
                     }
                 }
             }.worker, .{ input[start..end], result[start..end], f }) catch @panic("Failed to spawn thread");
-            
+
             thread_count += 1;
             start = end;
         }
@@ -97,7 +97,7 @@ pub const ThreadPool = struct {
         // Use threading for larger inputs
         const num_threads = std.Thread.getCpuCount() catch 1;
         const chunk_size = @max(1, input.len / num_threads);
-        
+
         var result = std.heap.page_allocator.alloc(U, input.len) catch @panic("Failed to allocate result buffer");
         var threads: [16]std.Thread = undefined;
         var thread_count: usize = 0;
@@ -106,7 +106,7 @@ pub const ThreadPool = struct {
         var start: usize = 0;
         while (start < input.len and thread_count < threads.len) {
             const end = @min(start + chunk_size, input.len);
-            
+
             threads[thread_count] = std.Thread.spawn(.{}, struct {
                 fn worker(input_slice: []const T, output_slice: []U, start_idx: usize, func: *const fn (usize, *const T) U) void {
                     for (input_slice, 0..) |item, i| {
@@ -114,7 +114,7 @@ pub const ThreadPool = struct {
                     }
                 }
             }.worker, .{ input[start..end], result[start..end], start, f }) catch @panic("Failed to spawn thread");
-            
+
             thread_count += 1;
             start = end;
         }

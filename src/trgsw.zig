@@ -767,7 +767,7 @@ test "trgsw poly mul with x k" {
 
     // Test rotation with k = 1 (should shift by 1)
     const rotated_1 = try polyMulWithXK(test_vec, 1);
-    defer std.heap.page_allocator.free(rotated_1);
+    // Note: polyMulWithXK returns a stack array, no need to free
 
     // Check if position 0 is correct (should be negated last element for k=1)
     // For k=1, the last element (1024) gets negated and placed at position 0
@@ -777,7 +777,7 @@ test "trgsw poly mul with x k" {
 
     // Test rotation with k = 0 (should be identity)
     const rotated_0 = try polyMulWithXK(test_vec, 0);
-    defer std.heap.page_allocator.free(rotated_0);
+    // Note: polyMulWithXK returns a stack array, no need to free
 
     // Should match original
     for (0..N) |i| {
@@ -786,7 +786,7 @@ test "trgsw poly mul with x k" {
 
     // Test rotation with k = N (should be identity with negation)
     const rotated_N = try polyMulWithXK(test_vec, N);
-    defer std.heap.page_allocator.free(rotated_N);
+    // Note: polyMulWithXK returns a stack array, no need to free
 
     // Should be negated using torus arithmetic: 0 -% x
     for (0..N) |i| {
