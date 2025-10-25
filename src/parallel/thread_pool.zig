@@ -1,16 +1,16 @@
-//! High-performance parallel implementation for zig-tfhe
+//! High-performance thread pool implementation for zig-tfhe
 //!
 //! This module provides efficient parallelization using Zig's threading capabilities
-//! to match Rust's Rayon performance for FHE operations.
+//! for parallel processing of FHE operations across multiple CPU cores.
 
 const std = @import("std");
 const ParallelConfig = @import("../parallel.zig").ParallelConfig;
 
-/// High-performance parallelization backend using Zig threading.
+/// High-performance thread pool for parallel processing.
 ///
 /// This implementation uses Zig's built-in threading for efficient CPU parallelization,
-/// matching Rust's Rayon performance characteristics.
-pub const RayonRailgun = struct {
+/// providing near-linear speedup on multi-core systems for independent operations.
+pub const ThreadPool = struct {
     const Self = @This();
 
     config: ParallelConfig,
@@ -34,8 +34,8 @@ pub const RayonRailgun = struct {
 
     /// Parallel map over a slice with a function - HIGH PERFORMANCE VERSION.
     ///
-    /// Uses Zig's threading to achieve near-linear speedup on multi-core systems.
-    /// This matches Rust's Rayon performance for FHE operations.
+    /// Uses Zig's threading to achieve near-linear speedup on multi-core systems,
+    /// distributing work across available CPU cores for maximum throughput.
     pub fn parMap(self: *const Self, comptime T: type, comptime U: type, input: []const T, f: *const fn (*const T) U) []U {
         _ = self; // Suppress unused parameter warning
 
@@ -143,8 +143,8 @@ pub const RayonRailgun = struct {
 
 // TESTS
 
-test "rayon par map" {
-    const railgun = RayonRailgun.new();
+test "thread pool par map" {
+    const railgun = ThreadPool.new();
     const input = [_]i32{ 1, 2, 3, 4, 5, 6, 7, 8 };
     const result = railgun.parMap(i32, i32, &input, struct {
         fn call(x: *const i32) i32 {
@@ -165,8 +165,8 @@ test "rayon par map" {
     try std.testing.expectEqual(@as(i32, 64), result[7]);
 }
 
-test "rayon large stack" {
-    const railgun = RayonRailgun.new();
+test "thread pool large stack" {
+    const railgun = ThreadPool.new();
     const config = ParallelConfig{
         .stack_size = 16 * 1024 * 1024, // 16MB
         .num_threads = 4,
@@ -186,8 +186,8 @@ test "rayon large stack" {
     try std.testing.expectEqual(@as(i32, 999000), result);
 }
 
-test "rayon indexed" {
-    const railgun = RayonRailgun.new();
+test "thread pool indexed" {
+    const railgun = ThreadPool.new();
     const input = [_][]const u8{ "a", "b", "c" };
     const result = railgun.parMapIndexed([]const u8, []const u8, &input, struct {
         fn call(i: usize, s: *const []const u8) []const u8 {

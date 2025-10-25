@@ -424,7 +424,7 @@ pub fn batchBlindRotate(
 pub fn batchBlindRotateWithRailgun(
     srcs: []const tlwe.TLWELv0,
     cloud_key: *const key.CloudKey,
-    railgun: *const @import("parallel.zig").RayonRailgun,
+    railgun: *const @import("parallel.zig").ThreadPool,
 ) ![]trlwe.TRLWELv1 {
     // Process each blind_rotate in parallel
     // Each operation is independent and uses thread-local FFT_PLAN
