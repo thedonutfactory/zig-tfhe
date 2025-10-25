@@ -106,76 +106,120 @@ pub const TRGSWLv1FFT = struct {
 
 // EXTERNAL PRODUCT OPERATIONS
 
-/// External product with FFT optimization.
+/// External product with FFT optimization - ZERO ALLOCATION VERSION.
+/// This matches Rust's external_product_with_fft exactly for maximum performance.
 pub fn externalProductWithFft(
     trgsw_fft: *const TRGSWLv1FFT,
     trlwe_input: *const trlwe.TRLWELv1,
     cloud_key: *const key.CloudKey,
     plan: *fft.FFTPlan,
 ) !trlwe.TRLWELv1 {
-    const dec = try decomposition(trlwe_input, cloud_key);
-    defer {
-        for (dec) |slice| {
-            std.heap.page_allocator.free(slice);
-        }
-        std.heap.page_allocator.free(dec);
+    // Use fixed-size arrays for zero-allocation hot path (matches Rust pattern)
+    var dec_storage: [params.implementation.trgsw_lv1.L * 2][params.implementation.trgsw_lv1.N]params.Torus = undefined;
+
+    // Initialize decomposition storage
+    for (0..params.implementation.trgsw_lv1.L * 2) |i| {
+        dec_storage[i] = [_]params.Torus{0} ** params.implementation.trgsw_lv1.N;
     }
 
+    // Perform decomposition into pre-allocated storage
+    try decompositionIntoStorage(trlwe_input, cloud_key, &dec_storage);
+
+    // Zero-allocation frequency domain accumulation
     var out_a_fft = [_]f64{0.0} ** 1024;
     var out_b_fft = [_]f64{0.0} ** 1024;
 
     const L = params.implementation.trgsw_lv1.L;
 
-    // Batch IFFT all decomposition digits at once
-    const dec_ffts = try plan.processor.batch_ifft(dec);
-    defer {
-        for (dec_ffts) |slice| {
-            std.heap.page_allocator.free(slice);
-        }
-        std.heap.page_allocator.free(dec_ffts);
-    }
+    // Use zero-allocation batch IFFT for maximum performance
+    var dec_ffts_storage: [params.implementation.trgsw_lv1.L * 2][1024]f64 = undefined;
+    plan.processor.batchIfft1024IntoBuffer(&dec_storage, &dec_ffts_storage);
 
-    // Accumulate in frequency domain (point-wise MAC)
+    // Accumulate in frequency domain (point-wise MAC) - zero allocation
     for (0..L * 2) |i| {
-        fmaInFd1024(&out_a_fft, dec_ffts[i], &trgsw_fft.trlwe_fft[i].a);
-        fmaInFd1024(&out_b_fft, dec_ffts[i], &trgsw_fft.trlwe_fft[i].b);
+        fmaInFd1024(&out_a_fft, &dec_ffts_storage[i], &trgsw_fft.trlwe_fft[i].a);
+        fmaInFd1024(&out_b_fft, &dec_ffts_storage[i], &trgsw_fft.trlwe_fft[i].b);
     }
 
-    // Single IFFT per output polynomial (a and b)
-    const result_a = try plan.processor.fft(&out_a_fft);
-    defer std.heap.page_allocator.free(result_a);
+    // Single IFFT per output polynomial (a and b) - specialized version
+    const result_a = plan.processor.fft1024(&out_a_fft);
+    const result_b = plan.processor.fft1024(&out_b_fft);
 
-    const result_b = try plan.processor.fft(&out_b_fft);
-    defer std.heap.page_allocator.free(result_b);
-
-    var result = trlwe.TRLWELv1.new();
-
-    // Copy results to output
-    for (result_a, 0..) |val, i| {
-        result.a[i] = val;
-    }
-    for (result_b, 0..) |val, i| {
-        result.b[i] = val;
-    }
+    const result = trlwe.TRLWELv1{
+        .a = result_a,
+        .b = result_b,
+    };
 
     return result;
 }
 
-/// Frequency domain multiply-accumulate for 1024-point FFT.
+/// Frequency domain multiply-accumulate for 1024-point FFT - SIMD OPTIMIZED.
 fn fmaInFd1024(res: []f64, a: []const f64, b: []const f64) void {
     // Complex multiply-accumulate in frequency domain: res += a * b
     // CRITICAL: 0.5 scaling required for negacyclic FFT correctness
-    for (0..512) |i| {
+
+    const Vec4 = @Vector(4, f64);
+    const scale = @as(Vec4, @splat(0.5));
+
+    // Process 4 complex numbers (8 f64 values) at a time
+    var i: usize = 0;
+    while (i + 4 <= 512) : (i += 4) {
+        // Load vectors for real and imaginary parts
+        const a_re: Vec4 = a[i..][0..4].*;
+        const a_im: Vec4 = a[i + 512 ..][0..4].*;
+        const b_re: Vec4 = b[i..][0..4].*;
+        const b_im: Vec4 = b[i + 512 ..][0..4].*;
+
         // Real part: res_re += (a_re*b_re - a_im*b_im) * 0.5
-        //res[i] += (a[i] * b[i] - a[i + 512] * b[i + 512]) * 0.5;
-        const tmp = (a[i + 512] * b[i + 512]) * 0.5 - res[i];
-        res[i] = (a[i] * b[i]) * 0.5 - tmp;
+        const real_part = (a_re * b_re - a_im * b_im) * scale;
+        const res_re: Vec4 = res[i..][0..4].*;
+        res[i..][0..4].* = res_re + real_part;
+
         // Imaginary part: res_im += (a_re*b_im + a_im*b_re) * 0.5
+        const imag_part = (a_re * b_im + a_im * b_re) * scale;
+        const res_im: Vec4 = res[i + 512 ..][0..4].*;
+        res[i + 512 ..][0..4].* = res_im + imag_part;
+    }
+
+    // Handle remaining elements (if any)
+    while (i < 512) : (i += 1) {
+        res[i] += (a[i] * b[i] - a[i + 512] * b[i + 512]) * 0.5;
         res[i + 512] += (a[i] * b[i + 512] + a[i + 512] * b[i]) * 0.5;
     }
 }
 
-/// Decomposition function for external product.
+/// Decomposition function for external product - ZERO ALLOCATION VERSION.
+/// This writes directly into pre-allocated storage to avoid heap allocations.
+pub fn decompositionIntoStorage(
+    trlwe_input: *const trlwe.TRLWELv1,
+    cloud_key: *const key.CloudKey,
+    storage: *[params.implementation.trgsw_lv1.L * 2][params.implementation.trgsw_lv1.N]params.Torus,
+) !void {
+    const L = params.implementation.trgsw_lv1.L;
+    const N = params.implementation.trgsw_lv1.N;
+
+    const offset = cloud_key.decomposition_offset;
+    const BGBIT = params.implementation.trgsw_lv1.BGBIT;
+    const MASK = (1 << BGBIT) - 1;
+    const HALF_BG = 1 << (BGBIT - 1);
+
+    // Serial version - parallelization overhead is too high for this workload
+    for (0..N) |j| {
+        const tmp0 = trlwe_input.a[j] +% offset;
+        const tmp1 = trlwe_input.b[j] +% offset;
+
+        for (0..L) |i| {
+            storage[i][j] = ((tmp0 >> @as(u5, @intCast(32 - ((@as(u32, @intCast(i)) + 1) * @as(u32, @intCast(BGBIT)))))) & MASK) -% HALF_BG;
+        }
+
+        for (0..L) |i| {
+            storage[i + L][j] = ((tmp1 >> @as(u5, @intCast(32 - ((@as(u32, @intCast(i)) + 1) * @as(u32, @intCast(BGBIT)))))) & MASK) -% HALF_BG;
+        }
+    }
+}
+
+/// Decomposition function for external product - ORIGINAL VERSION.
+/// This is kept for backward compatibility with existing tests.
 pub fn decomposition(
     trlwe_input: *const trlwe.TRLWELv1,
     cloud_key: *const key.CloudKey,
@@ -241,7 +285,8 @@ pub fn cmux(
 
 // BLIND ROTATION
 
-/// Blind rotation operation for bootstrapping.
+/// Blind rotation operation for bootstrapping - OPTIMIZED VERSION.
+/// Uses thread-local FFT plan and zero-allocation patterns for maximum performance.
 pub fn blindRotate(
     src: *const tlwe.TLWELv0,
     cloud_key: *const key.CloudKey,
@@ -251,49 +296,29 @@ pub fn blindRotate(
 
     const b_tilda = 2 * N - (((@as(usize, src.b()) + (1 << (params.TORUS_SIZE - 1 - NBIT - 1))) >> (params.TORUS_SIZE - NBIT - 1)));
 
+    // Use zero-allocation polynomial multiplication
     const a_rotated = try polyMulWithXK(&cloud_key.blind_rotate_testvec.a, b_tilda);
-    defer std.heap.page_allocator.free(a_rotated);
-
     const b_rotated = try polyMulWithXK(&cloud_key.blind_rotate_testvec.b, b_tilda);
-    defer std.heap.page_allocator.free(b_rotated);
 
     var result = trlwe.TRLWELv1{
-        .a = undefined,
-        .b = undefined,
+        .a = a_rotated,
+        .b = b_rotated,
     };
 
-    // Copy rotated arrays to fixed-size arrays
-    for (a_rotated, 0..) |val, i| {
-        result.a[i] = val;
-    }
-    for (b_rotated, 0..) |val, i| {
-        result.b[i] = val;
-    }
-
-    // Get or create thread-local FFT plan (reused across all CMUX operations)
+    // Use thread-local FFT plan for zero-allocation hot path (matches Rust pattern)
     const plan = try fft.getFFTPlan(std.heap.page_allocator);
 
     for (0..params.implementation.tlwe_lv0.N) |i| {
         const a_tilda = ((@as(usize, src.p[i]) + (1 << (params.TORUS_SIZE - 1 - NBIT - 1))) >> (params.TORUS_SIZE - NBIT - 1));
 
+        // Use zero-allocation polynomial multiplication
         const res2_a = try polyMulWithXK(&result.a, a_tilda);
-        defer std.heap.page_allocator.free(res2_a);
-
         const res2_b = try polyMulWithXK(&result.b, a_tilda);
-        defer std.heap.page_allocator.free(res2_b);
 
         var res2 = trlwe.TRLWELv1{
-            .a = undefined,
-            .b = undefined,
+            .a = res2_a,
+            .b = res2_b,
         };
-
-        // Copy rotated arrays to fixed-size arrays
-        for (res2_a, 0..) |val, j| {
-            res2.a[j] = val;
-        }
-        for (res2_b, 0..) |val, j| {
-            res2.b[j] = val;
-        }
 
         result = try cmux(
             &result,
@@ -374,22 +399,57 @@ pub fn blindRotateWithTestvec(
     return result;
 }
 
+/// Batch blind rotate - process multiple blind rotations in parallel.
+///
+/// This is a higher-level batching optimization. Instead of batching FFTs within
+/// a single blind_rotate, we batch multiple complete blind_rotate operations.
+/// Each blind_rotate uses thread-local cached FFT plans for efficiency.
+///
+/// # Performance
+/// Expected: Near-linear speedup with number of inputs on multi-core systems.
+/// This is more effective than fine-grained FFT batching because each
+/// blind_rotate is substantial work (~50ms) vs FFT overhead (~10ms).
+///
+/// # Usage
+/// Useful when processing multiple gates that each need bootstrapping.
+pub fn batchBlindRotate(
+    srcs: []const tlwe.TLWELv0,
+    cloud_key: *const key.CloudKey,
+) ![]trlwe.TRLWELv1 {
+    const parallel_mod = @import("parallel.zig");
+    return batchBlindRotateWithRailgun(srcs, cloud_key, parallel_mod.defaultRailgun());
+}
+
+/// Batch blind rotate with custom parallelization backend.
+pub fn batchBlindRotateWithRailgun(
+    srcs: []const tlwe.TLWELv0,
+    cloud_key: *const key.CloudKey,
+    railgun: *const @import("parallel.zig").ThreadPool,
+) ![]trlwe.TRLWELv1 {
+    // Process each blind_rotate in parallel
+    // Each operation is independent and uses thread-local FFT_PLAN
+    return railgun.parMap(tlwe.TLWELv0, trlwe.TRLWELv1, srcs, struct {
+        fn worker(src: *const tlwe.TLWELv0) !trlwe.TRLWELv1 {
+            return blindRotate(src, cloud_key);
+        }
+    }.worker);
+}
+
 // POLYNOMIAL OPERATIONS
 
-/// Polynomial multiplication with x^k (rotation).
+/// Polynomial multiplication with x^k (rotation) - ZERO ALLOCATION VERSION.
+/// This uses fixed-size arrays to avoid heap allocations in hot paths.
 pub fn polyMulWithXK(
     a: []const params.Torus,
     k: usize,
-) ![]params.Torus {
+) ![params.implementation.trgsw_lv1.N]params.Torus {
     const N = params.implementation.trgsw_lv1.N;
 
-    var res = try std.heap.page_allocator.alloc(params.Torus, N);
+    var res: [N]params.Torus = undefined;
 
     if (k < N) {
-        // Copy the shifted portion
-        for (0..N - k) |i| {
-            res[k + i] = a[i];
-        }
+        // Use bulk memory operations for better performance
+        @memcpy(res[k..N], a[0 .. N - k]);
         // Handle the wrapped portion with negation
         for (N - k..N) |i| {
             res[i + k - N] = 0 -% a[i]; // Negation in torus
@@ -399,9 +459,7 @@ pub fn polyMulWithXK(
         for (0..2 * N - k) |i| {
             res[i + k - N] = 0 -% a[i]; // Negation in torus
         }
-        for (2 * N - k..N) |i| {
-            res[i - (2 * N - k)] = a[i];
-        }
+        @memcpy(res[0 .. N - (2 * N - k)], a[2 * N - k .. N]);
     }
 
     return res;
@@ -709,7 +767,7 @@ test "trgsw poly mul with x k" {
 
     // Test rotation with k = 1 (should shift by 1)
     const rotated_1 = try polyMulWithXK(test_vec, 1);
-    defer std.heap.page_allocator.free(rotated_1);
+    // Note: polyMulWithXK returns a stack array, no need to free
 
     // Check if position 0 is correct (should be negated last element for k=1)
     // For k=1, the last element (1024) gets negated and placed at position 0
@@ -719,7 +777,7 @@ test "trgsw poly mul with x k" {
 
     // Test rotation with k = 0 (should be identity)
     const rotated_0 = try polyMulWithXK(test_vec, 0);
-    defer std.heap.page_allocator.free(rotated_0);
+    // Note: polyMulWithXK returns a stack array, no need to free
 
     // Should match original
     for (0..N) |i| {
@@ -728,7 +786,7 @@ test "trgsw poly mul with x k" {
 
     // Test rotation with k = N (should be identity with negation)
     const rotated_N = try polyMulWithXK(test_vec, N);
-    defer std.heap.page_allocator.free(rotated_N);
+    // Note: polyMulWithXK returns a stack array, no need to free
 
     // Should be negated using torus arithmetic: 0 -% x
     for (0..N) |i| {

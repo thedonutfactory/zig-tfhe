@@ -12,9 +12,9 @@
 const std = @import("std");
 
 // Import submodules
-pub const rayon_impl = @import("parallel/rayon_impl.zig");
+pub const thread_pool = @import("parallel/thread_pool.zig");
 
-pub const RayonRailgun = rayon_impl.RayonRailgun;
+pub const ThreadPool = thread_pool.ThreadPool;
 
 /// Configuration for parallel execution.
 pub const ParallelConfig = struct {
@@ -33,7 +33,7 @@ pub const ParallelConfig = struct {
 };
 
 // Note: In Zig, we don't need a trait abstraction for this use case.
-// The RayonRailgun struct provides the concrete implementation directly.
+// The ThreadPool struct provides the concrete implementation directly.
 
 /// Global default parallelization backend (singleton).
 ///
@@ -50,18 +50,18 @@ pub const ParallelConfig = struct {
 ///
 /// This design eliminates any overhead from repeatedly calling `default_railgun()`,.
 /// making it suitable for use in hot paths and benchmarks.
-var default_railgun_instance: ?RayonRailgun = null;
+var default_railgun_instance: ?ThreadPool = null;
 
-pub fn defaultRailgun() *const RayonRailgun {
+pub fn defaultRailgun() *const ThreadPool {
     if (default_railgun_instance == null) {
-        default_railgun_instance = RayonRailgun.default();
+        default_railgun_instance = ThreadPool.default();
     }
     return &default_railgun_instance.?;
 }
 
-/// Create a custom Rayon-based parallelization backend.
-pub fn rayonRailgun(config: ParallelConfig) RayonRailgun {
-    return RayonRailgun.withCustomConfig(config);
+/// Create a custom thread pool parallelization backend.
+pub fn threadPool(config: ParallelConfig) ThreadPool {
+    return ThreadPool.withCustomConfig(config);
 }
 
 // TESTS

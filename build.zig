@@ -2,11 +2,13 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
 
     // Create a module for the main source
     const main_module = b.addModule("main", .{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
+        .optimize = optimize,
     });
 
     // Create test executable
@@ -27,6 +29,7 @@ pub fn build(b: *std.Build) void {
     const add_two_numbers_module = b.addModule("add_two_numbers", .{
         .root_source_file = b.path("examples/add_two_numbers.zig"),
         .target = target,
+        .optimize = optimize,
     });
     add_two_numbers_module.addImport("main", main_module);
 

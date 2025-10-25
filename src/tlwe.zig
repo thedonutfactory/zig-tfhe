@@ -116,57 +116,125 @@ pub const TLWELv0 = struct {
         return message % message_modulus;
     }
 
-    /// Add two TLWE ciphertexts.
+    /// Add two TLWE ciphertexts - SIMD OPTIMIZED.
     pub fn add(self: *const Self, other: *const Self) TLWELv0 {
         var res = TLWELv0.new();
-        for (0..self.p.len) |i| {
+        const Vec4 = @Vector(4, params.Torus);
+
+        var i: usize = 0;
+        while (i + 4 <= self.p.len) : (i += 4) {
+            const va: Vec4 = self.p[i..][0..4].*;
+            const vb: Vec4 = other.p[i..][0..4].*;
+            res.p[i..][0..4].* = va +% vb;
+        }
+
+        // Handle remaining elements
+        while (i < self.p.len) : (i += 1) {
             res.p[i] = self.p[i] +% other.p[i];
         }
+
         return res;
     }
 
-    /// Subtract two TLWE ciphertexts.
+    /// Subtract two TLWE ciphertexts - SIMD OPTIMIZED.
     pub fn sub(self: *const Self, other: *const Self) TLWELv0 {
         var res = TLWELv0.new();
-        for (0..self.p.len) |i| {
+        const Vec4 = @Vector(4, params.Torus);
+
+        var i: usize = 0;
+        while (i + 4 <= self.p.len) : (i += 4) {
+            const va: Vec4 = self.p[i..][0..4].*;
+            const vb: Vec4 = other.p[i..][0..4].*;
+            res.p[i..][0..4].* = va -% vb;
+        }
+
+        // Handle remaining elements
+        while (i < self.p.len) : (i += 1) {
             res.p[i] = self.p[i] -% other.p[i];
         }
+
         return res;
     }
 
-    /// Negate a TLWE ciphertext.
+    /// Negate a TLWE ciphertext - SIMD OPTIMIZED.
     pub fn neg(self: *const Self) TLWELv0 {
         var res = TLWELv0.new();
-        for (0..self.p.len) |i| {
+        const Vec4 = @Vector(4, params.Torus);
+        const zero: Vec4 = @splat(params.ZERO_TORUS);
+
+        var i: usize = 0;
+        while (i + 4 <= self.p.len) : (i += 4) {
+            const va: Vec4 = self.p[i..][0..4].*;
+            res.p[i..][0..4].* = zero -% va;
+        }
+
+        // Handle remaining elements
+        while (i < self.p.len) : (i += 1) {
             res.p[i] = params.ZERO_TORUS -% self.p[i];
         }
+
         return res;
     }
 
-    /// Multiply two TLWE ciphertexts (element-wise).
+    /// Multiply two TLWE ciphertexts (element-wise) - SIMD OPTIMIZED.
     pub fn mul(self: *const Self, other: *const Self) TLWELv0 {
         var res = TLWELv0.new();
-        for (0..self.p.len) |i| {
+        const Vec4 = @Vector(4, params.Torus);
+
+        var i: usize = 0;
+        while (i + 4 <= self.p.len) : (i += 4) {
+            const va: Vec4 = self.p[i..][0..4].*;
+            const vb: Vec4 = other.p[i..][0..4].*;
+            res.p[i..][0..4].* = va *% vb;
+        }
+
+        // Handle remaining elements
+        while (i < self.p.len) : (i += 1) {
             res.p[i] = self.p[i] *% other.p[i];
         }
+
         return res;
     }
 
-    /// Add-multiply operation: self + other * multiplier.
+    /// Add-multiply operation: self + other * multiplier - SIMD OPTIMIZED.
     pub fn addMul(self: *const Self, other: *const Self, multiplier: params.Torus) TLWELv0 {
         var res = TLWELv0.new();
-        for (0..self.p.len) |i| {
+        const Vec4 = @Vector(4, params.Torus);
+        const mult: Vec4 = @splat(multiplier);
+
+        var i: usize = 0;
+        while (i + 4 <= self.p.len) : (i += 4) {
+            const va: Vec4 = self.p[i..][0..4].*;
+            const vb: Vec4 = other.p[i..][0..4].*;
+            res.p[i..][0..4].* = va +% (vb *% mult);
+        }
+
+        // Handle remaining elements
+        while (i < self.p.len) : (i += 1) {
             res.p[i] = self.p[i] +% (other.p[i] *% multiplier);
         }
+
         return res;
     }
 
-    /// Subtract-multiply operation: self - other * multiplier.
+    /// Subtract-multiply operation: self - other * multiplier - SIMD OPTIMIZED.
     pub fn subMul(self: *const Self, other: *const Self, multiplier: params.Torus) TLWELv0 {
         var res = TLWELv0.new();
-        for (0..self.p.len) |i| {
+        const Vec4 = @Vector(4, params.Torus);
+        const mult: Vec4 = @splat(multiplier);
+
+        var i: usize = 0;
+        while (i + 4 <= self.p.len) : (i += 4) {
+            const va: Vec4 = self.p[i..][0..4].*;
+            const vb: Vec4 = other.p[i..][0..4].*;
+            res.p[i..][0..4].* = va -% (vb *% mult);
+        }
+
+        // Handle remaining elements
+        while (i < self.p.len) : (i += 1) {
             res.p[i] = self.p[i] -% (other.p[i] *% multiplier);
         }
+
         return res;
     }
 };
