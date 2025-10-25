@@ -93,7 +93,7 @@ The `examples/` directory contains several demonstrations:
 Demonstrates homomorphic integer addition using a full adder circuit:
 
 ```bash
-build add_two_numbers -Doptimize=ReleaseFast -Dcpu=native 
+zig build add_two_numbers -Doptimize=ReleaseFast -Dcpu=native 
 ```
 
 This example adds two 16-bit numbers (402 + 304 = 706) entirely in the encrypted domain using homomorphic XOR, AND, and OR gates. See [examples/README.md](examples/README.md) for details.
