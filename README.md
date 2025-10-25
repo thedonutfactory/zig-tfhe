@@ -93,7 +93,7 @@ The `examples/` directory contains several demonstrations:
 Demonstrates homomorphic integer addition using a full adder circuit:
 
 ```bash
-zig build add_two_numbers -Doptimize=ReleaseFast -Dcpu=native 
+zig build add_two_numbers
 ```
 
 This example adds two 16-bit numbers (402 + 304 = 706) entirely in the encrypted domain using homomorphic XOR, AND, and OR gates. See [examples/README.md](examples/README.md) for details.
@@ -109,9 +109,9 @@ zig build test
 Run specific test modules:
 
 ```bash
-zig test src/gates.zig --test-filter "gates all" -Doptimize=ReleaseFast -Dcpu=native 
-zig test src/utils.zig  -Doptimize=ReleaseFast -Dcpu=native 
-zig test src/key.zig --test-filter "secret key" -Doptimize=ReleaseFast -Dcpu=native 
+zig test src/gates.zig --test-filter "gates all"
+zig test src/utils.zig
+zig test src/key.zig --test-filter "secret key"
 ```
 
 **Note**: The full test suite includes cloud key generation which takes ~30 seconds. Use test filters to run faster subsets during development.
