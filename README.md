@@ -4,7 +4,6 @@
 [![Zig](https://img.shields.io/badge/zig-0.14+%2B-orange.svg)](https://ziglang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Security](https://img.shields.io/badge/security-128--bit-green.svg)](https://github.com/thedonutfactory/zig-tfhe)
-[![DAITU](https://img.shields.io/badge/AI-DAITU%201.0-blue.svg)](DAITU)
 
 A high-performance Zig implementation of TFHE (Torus Fully Homomorphic Encryption).
 
