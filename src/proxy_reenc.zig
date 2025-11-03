@@ -453,4 +453,3 @@ test "proxy reencryption chain asymmetric" {
     const carol_ct = reencryptTLWELv0(&bob_ct, &reenc_key_bc);
     try std.testing.expectEqual(message, carol_ct.decryptBool(&carol_key.key_lv0));
 }
-
