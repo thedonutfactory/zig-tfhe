@@ -10,7 +10,8 @@ Demonstrates homomorphic integer addition by implementing a full adder circuit t
 
 **Run the example:**
 ```bash
-zig build add_two_numbers -Doptimize=ReleaseFast -Dcpu=native
+zig build add_two_numbers
+zig build proxy_reenc_demo
 ```
 
 **What it demonstrates:**

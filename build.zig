@@ -63,4 +63,27 @@ pub fn build(b: *std.Build) void {
 
     const add_two_numbers_step = b.step("add_two_numbers", "Run the add_two_numbers example");
     add_two_numbers_step.dependOn(&add_two_numbers_run.step);
+
+    // Create example: proxy_reencryption_demo
+    const proxy_reenc_demo_module = b.addModule("proxy_reencryption_demo", .{
+        .root_source_file = b.path("examples/proxy_reencryption_demo.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    proxy_reenc_demo_module.addImport("main", main_module);
+
+    const proxy_reenc_demo_exe = b.addExecutable(.{
+        .name = "proxy_reencryption_demo",
+        .root_module = proxy_reenc_demo_module,
+    });
+    proxy_reenc_demo_exe.linkLibC();
+    proxy_reenc_demo_exe.linkSystemLibrary("m");
+
+    b.installArtifact(proxy_reenc_demo_exe);
+
+    const proxy_reenc_demo_run = b.addRunArtifact(proxy_reenc_demo_exe);
+    proxy_reenc_demo_run.step.dependOn(b.getInstallStep());
+
+    const proxy_reenc_demo_step = b.step("proxy_reenc_demo", "Run the proxy_reencryption_demo example");
+    proxy_reenc_demo_step.dependOn(&proxy_reenc_demo_run.step);
 }

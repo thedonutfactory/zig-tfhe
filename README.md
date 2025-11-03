@@ -26,6 +26,7 @@ zig-tfhe is a comprehensive homomorphic encryption library that enables computat
 - **Specialized Uint Parameters**: Optimized parameter sets for different message moduli (1-8 bits)
 - **Homomorphic Gates**: Complete set of boolean operations (AND, OR, NAND, NOR, XOR, XNOR, NOT, MUX)
 - **Fast Arithmetic**: Efficient multi-bit arithmetic operations using ripple-carry adders
+- **Proxy Reencryption**: LWE-based secure delegation with asymmetric public keys (NEW in v0.2.0)
 - **Parallel Processing**: Native Zig parallelization for batch operations
 - **Memory Safety**: Zig's compile-time safety guarantees with comprehensive allocator tracking
 
@@ -98,6 +99,23 @@ zig build add_two_numbers
 
 This example adds two 16-bit numbers (402 + 304 = 706) entirely in the encrypted domain using homomorphic XOR, AND, and OR gates. See [examples/README.md](examples/README.md) for details.
 
+### Proxy Reencryption (NEW in v0.2.0)
+
+Demonstrates secure delegation of encrypted data access:
+
+```bash
+zig build proxy_reenc_demo
+```
+
+This example shows:
+- Asymmetric proxy reencryption (Bob never shares his secret key)
+- Multi-hop delegation chains (Alice → Bob → Carol)
+- Public key encryption
+- Performance metrics (~1.1ms per reencryption)
+- 100% accuracy verification
+
+See [PROXY_REENC.md](PROXY_REENC.md) for complete documentation.
+
 ## Testing
 
 Run all tests:
@@ -129,8 +147,10 @@ zig test src/key.zig --test-filter "secret key"
 - **`lut`** - Programmable bootstrapping with lookup tables
 - **`fft`** - Fast Fourier Transform for polynomial operations
 - **`bootstrap`** - Noise refreshing operations
+- **`proxy_reenc`** - Proxy reencryption for secure delegation (NEW in v0.2.0)
 - **`utils`** - Utility functions for torus operations and noise generation
 - **`bit_utils`** - Bit manipulation and encryption helpers
+- **`parallel`** - Thread pool for parallel operations
 
 ### Security Parameters
 

@@ -69,8 +69,11 @@ pub const lut = @import("lut.zig");
 /// Parallel processing utilities.
 pub const parallel = @import("parallel.zig");
 
+/// Proxy reencryption for secure delegation.
+pub const proxy_reenc = @import("proxy_reenc.zig");
+
 /// Library version.
-pub const version = "0.1.0";
+pub const version = "0.2.0";
 
 /// Library name.
 pub const name = "zig-tfhe";
@@ -96,7 +99,7 @@ pub fn printInfo() void {
 test "library info" {
     const info = getInfo();
     try std.testing.expectEqualStrings("zig-tfhe", info.name);
-    try std.testing.expectEqualStrings("0.1.0", info.version);
+    try std.testing.expectEqualStrings("0.2.0", info.version);
     try std.testing.expectEqualStrings("A Zig port of the rs-tfhe library for fully homomorphic encryption", info.description);
 }
 
@@ -125,4 +128,5 @@ test "module imports" {
     _ = lut;
     _ = parallel;
     _ = key;
+    _ = proxy_reenc;
 }

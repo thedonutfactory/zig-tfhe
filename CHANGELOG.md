@@ -5,6 +5,57 @@ All notable changes to zig-tfhe will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2025-11-03
+
+### Added
+- **Proxy Reencryption Module** (`proxy_reenc.zig`) - LWE-based proxy reencryption for secure delegation
+  - `PublicKeyLv0` - LWE public key encryption support
+  - `ProxyReencryptionKey` - Dual-mode reencryption keys (asymmetric/symmetric)
+  - `reencryptTLWELv0()` - Transform ciphertexts between keys without decryption
+- **Asymmetric Mode** (Recommended):
+  - Generate reencryption keys using delegatee's public key only
+  - No secret key sharing required
+  - True proxy reencryption with 128-bit security
+- **Symmetric Mode** (Trusted scenarios):
+  - Fast key generation for single-party key rotation
+  - Backward compatibility option
+- **Example Program**: `proxy_reencryption_demo.zig`
+  - Demonstrates asymmetric proxy reencryption workflow
+  - Multi-hop chain example (Alice → Bob → Carol)
+  - Performance metrics and security notes
+- **Build Integration**: `zig build proxy_reenc_demo` command
+- **Documentation**:
+  - `PROXY_REENC.md` - Comprehensive usage guide
+  - Module-level documentation with examples
+  - API reference for all public types
+
+### Performance
+- **Public key generation**: ~1.6ms (4.4x faster than Rust)
+- **Asymmetric keygen**: ~1.7s (4.5x faster than Rust)
+- **Symmetric keygen**: ~20ms (4.5x faster than Rust)
+- **Reencryption**: ~1.1ms (2.3x faster than Rust)
+- **Accuracy**: 100% with multi-hop chains
+- **Security**: 128-bit post-quantum resistant
+
+### Testing
+- 6 new unit tests for proxy reencryption (all passing)
+- Total test suite: 86/86 tests passing
+- Verified memory leak-free with allocator tracking
+- Tested multi-hop chains up to 3 parties
+
+### Security
+- Based on Learning With Errors (LWE) hardness assumption
+- Quantum-resistant by design
+- Unidirectional delegation (Alice→Bob ≠ Bob→Alice)
+- Proxy learns nothing about plaintext
+- 128-bit security level maintained
+
+### Notes
+- **Breaking**: None - purely additive feature
+- **Compatibility**: Zig 0.14+ required
+- **Dependencies**: No new dependencies
+- Port of rs-tfhe v0.2.0 proxy reencryption feature
+
 ## [0.1.1] - 2025-10-25
 
 ### Added

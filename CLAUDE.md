@@ -17,7 +17,7 @@ High-performance Zig implementation of TFHE (Torus Fully Homomorphic Encryption)
 TLWE → TRLWE → TRGSW → Homomorphic Gates
 ```
 
-**Core Modules**: `params`, `key`, `tlwe`, `trlwe`, `trgsw`, `gates`, `bootstrap`, `lut`, `fft`, `utils`, `bit_utils`, `parallel`
+**Core Modules**: `params`, `key`, `tlwe`, `trlwe`, `trgsw`, `gates`, `bootstrap`, `lut`, `fft`, `utils`, `bit_utils`, `parallel`, `proxy_reenc`
 
 ## Quick Start
 
@@ -53,7 +53,8 @@ pub fn main() !void {
 ## Examples
 
 ```bash
-zig build add_two_numbers  # 16-bit homomorphic addition (402 + 304 = 706)
+zig build add_two_numbers   # 16-bit homomorphic addition (402 + 304 = 706)
+zig build proxy_reenc_demo  # LWE proxy reencryption demonstration
 ```
 
 ## Security Parameters
@@ -83,6 +84,32 @@ zig test src/gates.zig --test-filter "gates all"  # Specific modules
 **Implemented**: Core TFHE, gates, bootstrapping, FFT, parallelization  
 **Recent**: SIMD optimizations, 4.8% performance improvement  
 **Performance**: 2.51x slower than Rust (improved from 2.62x)
+
+## Proxy Reencryption
+
+Securely delegate access to encrypted data without decryption:
+
+```zig
+const proxy_reenc = @import("proxy_reenc");
+
+// Bob publishes his public key
+var bob_public_key = try proxy_reenc.PublicKeyLv0.new(allocator, &bob_key.key_lv0);
+defer bob_public_key.deinit(allocator);
+
+// Alice generates reencryption key using Bob's PUBLIC key
+var reenc_key = try proxy_reenc.ProxyReencryptionKey.newAsymmetric(
+    allocator, 
+    &alice_key.key_lv0, 
+    &bob_public_key
+);
+defer reenc_key.deinit(allocator);
+
+// Proxy converts without learning plaintext
+const bob_ct = proxy_reenc.reencryptTLWELv0(&alice_ct, &reenc_key);
+
+// Bob decrypts with his secret key
+const plaintext = bob_ct.decryptBool(&bob_key.key_lv0);
+```
 
 ## Key Patterns
 
